@@ -191,13 +191,9 @@ async def verify_chain(agent: str) -> ChainStatus:
         h.update(bytes(payload_canonical))
         expected = h.digest()
         if bytes(db_row_hash) != expected:
-            return ChainStatus(
-                kind="broken", agent=agent, rows_checked=i + 1, broken_at_id=row_id
-            )
+            return ChainStatus(kind="broken", agent=agent, rows_checked=i + 1, broken_at_id=row_id)
         if prev_hash is not None and (db_prev is None or bytes(db_prev) != prev_hash):
-            return ChainStatus(
-                kind="broken", agent=agent, rows_checked=i + 1, broken_at_id=row_id
-            )
+            return ChainStatus(kind="broken", agent=agent, rows_checked=i + 1, broken_at_id=row_id)
         prev_hash = expected
 
     return ChainStatus(kind="ok", agent=agent, rows_checked=len(rows))

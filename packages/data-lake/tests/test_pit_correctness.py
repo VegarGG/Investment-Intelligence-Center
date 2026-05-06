@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import pytest
-
 from data_lake.exceptions import PITViolation
 from data_lake.pit import assert_pit_safe
 
 
 class TestAssertPITSafe:
     def test_passes_with_as_of_lte(self) -> None:
-        assert_pit_safe(
-            "SELECT * FROM lake.timeseries WHERE as_of <= '2024-06-01'"
-        )
+        assert_pit_safe("SELECT * FROM lake.timeseries WHERE as_of <= '2024-06-01'")
 
     def test_passes_with_as_of_lt(self) -> None:
         assert_pit_safe(
@@ -30,9 +27,7 @@ class TestAssertPITSafe:
 
     def test_fails_when_only_ts_predicate_present(self) -> None:
         with pytest.raises(PITViolation):
-            assert_pit_safe(
-                "SELECT * FROM lake.timeseries WHERE ts <= '2024-06-01'"
-            )
+            assert_pit_safe("SELECT * FROM lake.timeseries WHERE ts <= '2024-06-01'")
 
     def test_fails_when_no_predicate_at_all(self) -> None:
         # raw select from a PIT table without any WHERE clause
@@ -52,6 +47,4 @@ class TestAssertPITSafe:
     def test_fails_when_as_of_appears_only_in_select_list(self) -> None:
         # Selecting as_of but not constraining it is still a violation.
         with pytest.raises(PITViolation):
-            assert_pit_safe(
-                "SELECT symbol, ts, as_of FROM lake.timeseries WHERE symbol = 'AAPL'"
-            )
+            assert_pit_safe("SELECT symbol, ts, as_of FROM lake.timeseries WHERE symbol = 'AAPL'")

@@ -17,11 +17,9 @@ async def pg_health() -> dict[str, Any]:
     try:
         async with session("ro") as s:
             ping = (await s.execute(text("SELECT 1"))).scalar_one()
-            advice_n = (
-                await s.execute(text("SELECT count(*) FROM lake.advice"))
-            ).scalar_one()
+            advice_n = (await s.execute(text("SELECT count(*) FROM lake.advice"))).scalar_one()
         return {"status": "ok", "ping": int(ping), "advice_rows": int(advice_n)}
-    except Exception as exc:  # noqa: BLE001 — probe surface intentionally wide
+    except Exception as exc:
         raise StoreUnavailable(f"postgres: {exc}") from exc
 
 
@@ -38,7 +36,7 @@ async def chroma_health() -> dict[str, Any]:
             "collections_present": names,
             "missing_canonical": missing,
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise StoreUnavailable(f"chroma: {exc}") from exc
 
 
@@ -59,15 +57,18 @@ async def minio_health() -> dict[str, Any]:
             "buckets_present": present,
             "missing": missing,
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise StoreUnavailable(f"minio: {exc}") from exc
 
 
 async def redis_health() -> dict[str, Any]:
     try:
+        import inspect
+
         from data_lake.redis import client
 
-        ok = await client().ping()
+        result = client().ping()
+        ok = await result if inspect.isawaitable(result) else bool(result)
         return {"status": "ok" if ok else "degraded"}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise StoreUnavailable(f"redis: {exc}") from exc

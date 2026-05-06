@@ -9,7 +9,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from data_lake.chroma import CANONICAL_COLLECTIONS, bootstrap_collections
 
 

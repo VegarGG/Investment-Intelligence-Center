@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import op  # type: ignore[import]
+from alembic import op
 
 revision: str = "0001"
 down_revision: str | Sequence[str] | None = None
@@ -51,15 +51,9 @@ def upgrade() -> None:
         ) PARTITION BY RANGE (event_ts);
         """
     )
-    op.execute(
-        "CREATE INDEX events_event_ts_idx ON lake.events (event_ts DESC)"
-    )
-    op.execute(
-        "CREATE INDEX events_source_idx ON lake.events (source_id, event_ts DESC)"
-    )
-    op.execute(
-        "CREATE INDEX events_raw_gin ON lake.events USING gin (raw jsonb_path_ops)"
-    )
+    op.execute("CREATE INDEX events_event_ts_idx ON lake.events (event_ts DESC)")
+    op.execute("CREATE INDEX events_source_idx ON lake.events (source_id, event_ts DESC)")
+    op.execute("CREATE INDEX events_raw_gin ON lake.events USING gin (raw jsonb_path_ops)")
     op.execute(
         """
         SELECT partman.create_parent(
@@ -101,12 +95,8 @@ def upgrade() -> None:
         "SELECT create_hypertable('lake.timeseries', 'ts', "
         "chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);"
     )
-    op.execute(
-        "SELECT add_retention_policy('lake.timeseries', INTERVAL '10 years');"
-    )
-    op.execute(
-        "CREATE INDEX timeseries_symbol_ts_idx ON lake.timeseries (symbol, ts DESC);"
-    )
+    op.execute("SELECT add_retention_policy('lake.timeseries', INTERVAL '10 years');")
+    op.execute("CREATE INDEX timeseries_symbol_ts_idx ON lake.timeseries (symbol, ts DESC);")
     # PIT-rule guard: as_of must never be in the future at insert time.
     op.execute(
         """
@@ -178,9 +168,7 @@ def upgrade() -> None:
         );
         """
     )
-    op.execute(
-        "CREATE UNIQUE INDEX advice_agent_chain_idx ON lake.advice (agent, issued_at, id)"
-    )
+    op.execute("CREATE UNIQUE INDEX advice_agent_chain_idx ON lake.advice (agent, issued_at, id)")
     op.execute("CREATE INDEX advice_ticker_idx ON lake.advice (asset_ticker, issued_at DESC)")
     # Concurrency guard: two writers cannot share the same prev_hash for one agent.
     op.execute(

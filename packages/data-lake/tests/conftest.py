@@ -15,14 +15,10 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if os.environ.get("IIC_INTEGRATION") == "1":
         return
-    skip_integration = pytest.mark.skip(
-        reason="integration test — set IIC_INTEGRATION=1 to run"
-    )
+    skip_integration = pytest.mark.skip(reason="integration test — set IIC_INTEGRATION=1 to run")
     for item in items:
         if "integration" in item.keywords:
             item.add_marker(skip_integration)

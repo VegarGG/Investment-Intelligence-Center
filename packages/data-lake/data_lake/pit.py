@@ -11,18 +11,20 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 import sqlglot
-from sqlglot import expressions as exp
 from sqlalchemy.sql import Select
+from sqlglot import expressions as exp
 
 from data_lake.exceptions import PITViolation
 
-PIT_TABLES: frozenset[str] = frozenset({
-    "timeseries",  # lake.timeseries
-    "doc_chunks",  # any join through doc_chunks for backtests
-})
+PIT_TABLES: frozenset[str] = frozenset(
+    {
+        "timeseries",  # lake.timeseries
+        "doc_chunks",  # any join through doc_chunks for backtests
+    }
+)
 """Tables whose backtest reads must constrain `as_of`."""
 
 
@@ -47,7 +49,9 @@ def _has_as_of_filter(parsed: exp.Expression) -> bool:
             if col.name.lower() == "as_of":
                 # require the column appear inside a comparison, not just a SELECT
                 parent = col.parent
-                while parent and not isinstance(parent, (exp.LT, exp.LTE, exp.GT, exp.GTE, exp.EQ, exp.Between)):
+                while parent and not isinstance(
+                    parent, exp.LT | exp.LTE | exp.GT | exp.GTE | exp.EQ | exp.Between
+                ):
                     parent = parent.parent
                 if parent is not None:
                     return True
@@ -65,7 +69,7 @@ def assert_pit_safe(query: str | Select[Any], dialect: str = "postgres") -> None
         assert_pit_safe("SELECT * FROM lake.timeseries WHERE ts <= '2024-06-01'")
     """
     sql = _to_sql(query)
-    parsed = sqlglot.parse_one(sql, read=dialect)
+    parsed = cast(exp.Expression, sqlglot.parse_one(sql, read=dialect))
     if not _references_table(parsed, list(PIT_TABLES)):
         return  # query doesn't touch PIT-sensitive tables, nothing to enforce
     if not _has_as_of_filter(parsed):

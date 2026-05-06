@@ -14,8 +14,8 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from chromadb.api import ClientAPI
     from chromadb.api.models.Collection import Collection
-    from chromadb.api.types import HttpClient as HttpClientType
 
 from data_lake.config import get_config
 
@@ -32,7 +32,7 @@ class Hit:
 
 
 @lru_cache(maxsize=1)
-def client() -> HttpClientType:
+def client() -> ClientAPI:
     import chromadb
 
     cfg = get_config()
@@ -46,9 +46,7 @@ def get_or_create(name: str, metadata: dict[str, Any] | None = None) -> Collecti
     )
 
 
-def upsert_doc(
-    collection_name: str, doc_id: str, text: str, meta: dict[str, Any]
-) -> None:
+def upsert_doc(collection_name: str, doc_id: str, text: str, meta: dict[str, Any]) -> None:
     coll = get_or_create(collection_name)
     coll.upsert(ids=[doc_id], documents=[text], metadatas=[meta])
 
@@ -72,7 +70,7 @@ def query(
                 doc_id=ids[i],
                 text=doc,
                 score=1.0 - float(distances[i]) if distances else 0.0,
-                metadata=metas[i] if metas else {},
+                metadata=dict(metas[i]) if metas else {},
             )
         )
     return out

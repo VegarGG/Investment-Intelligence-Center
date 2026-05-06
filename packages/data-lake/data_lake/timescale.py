@@ -22,9 +22,7 @@ async def is_hypertable(conn: AsyncConnection, table: str, schema: str = "lake")
     return row.first() is not None
 
 
-async def hypertable_chunk_count(
-    conn: AsyncConnection, table: str, schema: str = "lake"
-) -> int:
+async def hypertable_chunk_count(conn: AsyncConnection, table: str, schema: str = "lake") -> int:
     row = await conn.execute(
         text(
             "SELECT count(*) FROM timescaledb_information.chunks "

@@ -11,16 +11,14 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-import orjson
 import pytest
-
 from data_lake.advice_ledger import (
-    AdviceLedgerError,
     _canonical_json,
     append,
     compute_row_hash,
     verify_chain,
 )
+from data_lake.exceptions import AdviceLedgerError
 
 
 def _sample_advice(idx: int, agent: str = "test") -> dict[str, Any]:
@@ -136,9 +134,8 @@ class TestChainIntegration:
         """Tamper detection: rewrite payload_canonical for one row out-of-band
         and verify_chain catches it. Requires superuser to bypass the
         REVOKE UPDATE on iic_app — skip if running as iic_app."""
-        from sqlalchemy import text
-
         from data_lake.postgres import session
+        from sqlalchemy import text
 
         agent = "test_chain_tamper"
         for i in range(5):
@@ -167,10 +164,9 @@ class TestLedgerImmutability:
 
     @pytest.mark.asyncio
     async def test_iic_app_cannot_delete(self) -> None:
-        from sqlalchemy.exc import ProgrammingError
-        from sqlalchemy import text
-
         from data_lake.postgres import session
+        from sqlalchemy import text
+        from sqlalchemy.exc import ProgrammingError
 
         agent = "test_immut"
         await append(_sample_advice(0, agent=agent))
@@ -183,10 +179,9 @@ class TestLedgerImmutability:
 
     @pytest.mark.asyncio
     async def test_iic_app_cannot_update(self) -> None:
-        from sqlalchemy.exc import ProgrammingError
-        from sqlalchemy import text
-
         from data_lake.postgres import session
+        from sqlalchemy import text
+        from sqlalchemy.exc import ProgrammingError
 
         agent = "test_immut_upd"
         await append(_sample_advice(0, agent=agent))

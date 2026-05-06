@@ -55,7 +55,10 @@ class AdviceV1(BaseModel):
     @classmethod
     def _require_at_least_one_citation(cls, v: list[Evidence]) -> list[Evidence]:
         if not v:
-            raise ValueError("advice.v1 requires at least one evidence entry — uncited advice is rejected by the backtester")
+            raise ValueError(
+                "advice.v1 requires at least one evidence entry "
+                "— uncited advice is rejected by the backtester"
+            )
         return v
 
     @field_validator("entry_band", "target_band")

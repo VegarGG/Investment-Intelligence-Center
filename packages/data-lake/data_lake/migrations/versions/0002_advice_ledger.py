@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import op  # type: ignore[import]
+from alembic import op
 
 revision: str = "0002"
 down_revision: str | Sequence[str] | None = "0001"

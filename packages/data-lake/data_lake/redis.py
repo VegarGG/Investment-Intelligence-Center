@@ -14,10 +14,10 @@ KEY PREFIXES (GROUND TRUTH from §5.8):
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from redis.asyncio import Redis  # type: ignore[import]
+    from redis.asyncio import Redis
 
 from data_lake.config import get_config
 
@@ -28,7 +28,7 @@ LOCK_TTL = 60  # seconds
 
 @lru_cache(maxsize=1)
 def client() -> Redis:
-    from redis import asyncio as aioredis  # type: ignore[import]
+    from redis import asyncio as aioredis
 
     cfg = get_config()
     return aioredis.from_url(cfg.redis_url, encoding="utf-8", decode_responses=True)
@@ -44,7 +44,7 @@ async def seen_dedupe(content_hash: str) -> bool:
 
 async def llm_cache_get(route: str, prompt_hash: str) -> str | None:
     r = client()
-    return await r.get(f"cache:llm:{route}:{prompt_hash}")
+    return cast(str | None, await r.get(f"cache:llm:{route}:{prompt_hash}"))
 
 
 async def llm_cache_set(route: str, prompt_hash: str, value: str) -> None:
@@ -59,4 +59,4 @@ async def crawler_cursor_set(feed_id: str, value: str) -> None:
 
 async def crawler_cursor_get(feed_id: str) -> str | None:
     r = client()
-    return await r.get(f"last_seen:{feed_id}")
+    return cast(str | None, await r.get(f"last_seen:{feed_id}"))
