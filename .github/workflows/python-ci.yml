@@ -1,0 +1,33 @@
+# Phase-0 lint + typecheck. Real test suites land per agent in their workflow doc.
+name: python-ci
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry==1.8.4
+
+      - name: Install dev dependencies
+        run: poetry install --only dev --no-root
+
+      - name: Ruff
+        run: poetry run ruff check .
+
+      - name: Black --check
+        run: poetry run black --check .
+
+      - name: Mypy
+        run: poetry run mypy packages apps --exclude apps/dashboard

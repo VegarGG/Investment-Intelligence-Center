@@ -1,0 +1,25 @@
+# Workflow 01 §5.6 acceptance gate: `infra/nas/migrate.sh --dry-run` must
+# exit 0 on every commit. Keeps the migration story green even before any
+# NAS exists.
+name: nas-migrate-dryrun
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+
+      - name: Run NAS migrate dry-run
+        run: bash infra/nas/migrate.sh --dry-run
+
+      - name: Confirm exit zero
+        run: echo "NAS migrate dry-run passed."

@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "iic-data-lake"
+version = "0.1.0"
+description = "Postgres+TimescaleDB + ChromaDB + MinIO + Redis clients (workflow 02)."
+authors = ["Ziwei <watter008@gmail.com>"]
+package-mode = false
+packages = [{ include = "data_lake" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"

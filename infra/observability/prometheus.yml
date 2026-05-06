@@ -1,0 +1,33 @@
+# Phase-0 minimal Prometheus config. Real scrape targets land in workflow 30.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # node_exporter runs on the host (not a container); workflow 01 §5.2 step 4
+  # installs prometheus-node-exporter via apt.
+  - job_name: node_exporter
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+
+  # Agent /health endpoints — wired into Prometheus via the FastAPI default
+  # metrics endpoint when each agent gets its instrumentation in workflow 30.
+  - job_name: iic_agents
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "orchestrator:8080"
+          - "agent_intelligence:8081"
+          - "agent_fundamental:8082"
+          - "agent_quant:8083"
+          - "agent_persona:8084"
+          - "agent_backtest:8085"
+          - "agent_secretary:8086"

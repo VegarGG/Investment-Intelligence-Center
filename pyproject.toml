@@ -1,0 +1,67 @@
+[tool.poetry]
+name = "intelligence-center"
+version = "0.1.0"
+description = "Investment Intelligence Center — agentic investment-advisory system (IIC v2.1)"
+authors = ["Ziwei <watter008@gmail.com>"]
+readme = "EXECUTIVE_SUMMARY_bilingual.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.6.9"
+black = "^24.10"
+mypy = "^1.13"
+pytest = "^8.3"
+pytest-asyncio = "^0.24"
+pytest-cov = "^5.0"
+types-pyyaml = "^6.0"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["apps/dashboard"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",       # pycodestyle + pyflakes
+  "I",                  # isort
+  "B",                  # bugbear
+  "UP",                 # pyupgrade
+  "SIM",                # simplify
+  "RUF",                # ruff-specific
+  "ASYNC",              # async lint
+  "S",                  # bandit basics
+]
+ignore = ["S101"]       # allow assert in tests
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+extend-exclude = "apps/dashboard"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = ["apps/dashboard"]
+
+[[tool.mypy.overrides]]
+module = ["nats.*", "chromadb.*", "vectorbt.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["apps", "packages"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-ra --strict-markers --cov-report=term-missing"

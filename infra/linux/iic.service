@@ -1,0 +1,20 @@
+[Unit]
+Description=IIC v2.1 — Investment Intelligence Center stack
+Documentation=https://github.com/VegarGG/Investment-Intelligence-Center
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/iic
+ExecStartPre=/usr/local/bin/iic-decrypt-secrets.sh
+ExecStart=/usr/bin/docker compose -f /opt/iic/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -f /opt/iic/docker-compose.yml down
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=15s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "iic-schema"
+version = "0.1.0"
+description = "Pydantic + TS shared types — advice.v1 contract (workflow 05)."
+authors = ["Ziwei <watter008@gmail.com>"]
+package-mode = false
+packages = [{ include = "schema" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"

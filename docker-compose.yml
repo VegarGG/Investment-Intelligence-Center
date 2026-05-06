@@ -1,0 +1,183 @@
+# IIC v2.1 — root compose file.
+#
+# GROUND TRUTH (workflow 01 §2.5–§2.6, PLAN §0):
+#   - Every persistent volume is a BIND MOUNT under /srv/iic/<service>.
+#     No Docker named volumes anywhere. This is what makes NAS migration
+#     a `mount` change with zero compose edits (workflow 01 §5.6).
+#   - All services share `.env` via the iic-base anchor.
+#
+# Phase-0 scope: substrate (NATS, Postgres+Timescale, ChromaDB, MinIO, Redis,
+# Grafana, Loki, Prometheus, cadvisor) + Phase-0 agent stubs that come up
+# green on /health. Real agent logic lands per its workflow doc.
+
+x-iic-base: &iic-base
+  restart: unless-stopped
+  env_file: .env
+
+services:
+  # ----------------------------------------------------------------- substrate
+  nats:
+    <<: *iic-base
+    image: nats:2.10-alpine
+    container_name: iic-nats
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    volumes:
+      - /srv/iic/nats:/data
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  postgres:
+    <<: *iic-base
+    image: timescale/timescaledb-ha:pg16
+    container_name: iic-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - /srv/iic/pg:/home/postgres/pgdata/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chroma:
+    <<: *iic-base
+    image: chromadb/chroma:0.5.20
+    container_name: iic-chroma
+    volumes:
+      - /srv/iic/chroma:/chroma/.chroma
+    ports:
+      - "8000:8000"
+
+  minio:
+    <<: *iic-base
+    image: minio/minio:RELEASE.2024-10-29T16-01-48Z
+    container_name: iic-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - /srv/iic/minio:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  redis:
+    <<: *iic-base
+    image: redis:7-alpine
+    container_name: iic-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - /srv/iic/redis:/data
+    ports:
+      - "6379:6379"
+
+  # ----------------------------------------------------------- observability
+  grafana:
+    <<: *iic-base
+    image: grafana/grafana:11.3.0
+    container_name: iic-grafana
+    volumes:
+      - /srv/iic/grafana:/var/lib/grafana
+    ports:
+      - "3000:3000"
+
+  loki:
+    <<: *iic-base
+    image: grafana/loki:3.2.0
+    container_name: iic-loki
+    volumes:
+      - /srv/iic/loki:/loki
+    ports:
+      - "3100:3100"
+
+  prometheus:
+    <<: *iic-base
+    image: prom/prometheus:v2.55.0
+    container_name: iic-prometheus
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /srv/iic/prometheus:/prometheus
+    ports:
+      - "9090:9090"
+
+  cadvisor:
+    <<: *iic-base
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: iic-cadvisor
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    ports:
+      - "8088:8080"
+
+  # ----------------------------------------------------- orchestrator + agents
+  orchestrator:
+    <<: *iic-base
+    build:
+      context: ./apps/orchestrator
+    container_name: iic-orchestrator
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats: { condition: service_started }
+      chroma: { condition: service_started }
+    ports:
+      - "8080:8080"
+
+  agent_intelligence:
+    <<: *iic-base
+    build: { context: ./apps/agent_intelligence }
+    container_name: iic-agent-intelligence
+    depends_on: [nats, postgres]
+    ports: ["8081:8081"]
+
+  agent_fundamental:
+    <<: *iic-base
+    build: { context: ./apps/agent_fundamental }
+    container_name: iic-agent-fundamental
+    depends_on: [nats, postgres]
+    ports: ["8082:8082"]
+
+  agent_quant:
+    <<: *iic-base
+    build: { context: ./apps/agent_quant }
+    container_name: iic-agent-quant
+    depends_on: [nats, postgres]
+    ports: ["8083:8083"]
+
+  agent_persona:
+    <<: *iic-base
+    build: { context: ./apps/agent_persona }
+    container_name: iic-agent-persona
+    depends_on: [nats, postgres, chroma]
+    ports: ["8084:8084"]
+
+  agent_backtest:
+    <<: *iic-base
+    build: { context: ./apps/agent_backtest }
+    container_name: iic-agent-backtest
+    depends_on: [nats, postgres]
+    ports: ["8085:8085"]
+
+  agent_secretary:
+    <<: *iic-base
+    build: { context: ./apps/agent_secretary }
+    container_name: iic-agent-secretary
+    depends_on: [nats, postgres]
+    ports: ["8086:8086"]
+
+  dashboard:
+    <<: *iic-base
+    build: { context: ./apps/dashboard }
+    container_name: iic-dashboard
+    ports: ["4173:80"]

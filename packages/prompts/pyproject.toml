@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "iic-prompts"
+version = "0.1.0"
+description = "Versioned prompt registry + eval golden set (workflow 04)."
+authors = ["Ziwei <watter008@gmail.com>"]
+package-mode = false
+packages = [{ include = "prompts" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"

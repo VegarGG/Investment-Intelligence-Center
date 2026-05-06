@@ -1,0 +1,11 @@
+[Unit]
+Description=IIC v2.1 — restic backup oneshot
+Requires=iic.service
+After=iic.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/iic/infra/linux/restic/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
