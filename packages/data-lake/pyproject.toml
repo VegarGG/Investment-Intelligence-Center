@@ -3,11 +3,21 @@ name = "iic-data-lake"
 version = "0.1.0"
 description = "Postgres+TimescaleDB + ChromaDB + MinIO + Redis clients (workflow 02)."
 authors = ["Ziwei <watter008@gmail.com>"]
-package-mode = false
 packages = [{ include = "data_lake" }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+pydantic = "^2.9"
+sqlalchemy = { version = "^2.0", extras = ["asyncio"] }
+asyncpg = "^0.30"
+psycopg2-binary = "^2.9"
+alembic = "^1.13"
+chromadb = "^0.5"
+minio = "^7.2"
+redis = "^5.2"
+sqlglot = "^25.30"
+python-ulid = "^3.0"
+orjson = "^3.10"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]

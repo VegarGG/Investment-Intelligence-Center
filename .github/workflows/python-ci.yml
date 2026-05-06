@@ -23,6 +23,12 @@ jobs:
       - name: Install dev dependencies
         run: poetry install --only dev --no-root
 
+      - name: Install data-lake runtime deps for tests
+        run: |
+          pip install \
+            'pydantic>=2.9' 'sqlalchemy[asyncio]>=2.0' 'sqlglot>=25.30' \
+            'orjson>=3.10' 'python-ulid>=3.0' 'chromadb>=0.5' 'redis>=5.2' 'minio>=7.2'
+
       - name: Ruff
         run: poetry run ruff check .
 
@@ -31,3 +37,6 @@ jobs:
 
       - name: Mypy
         run: poetry run mypy packages apps --exclude apps/dashboard
+
+      - name: Pytest (unit only)
+        run: poetry run pytest -q -m "not integration"

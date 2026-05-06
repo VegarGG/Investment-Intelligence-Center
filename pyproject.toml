@@ -62,6 +62,14 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["apps", "packages"]
+testpaths = ["packages", "apps"]
 python_files = ["test_*.py", "*_test.py"]
-addopts = "-ra --strict-markers --cov-report=term-missing"
+addopts = "-ra --strict-markers"
+pythonpath = [
+  "packages/data-lake",
+  "packages/schema",
+  "packages/llm-client",
+  "packages/data-bus",
+  "packages/prompts",
+  "packages/notifier",
+]
