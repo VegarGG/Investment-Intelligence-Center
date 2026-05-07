@@ -14,11 +14,11 @@ RUN apt-get update \
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
-COPY agent_secretary/ ./agent_secretary/
+COPY secretary/ ./secretary/
 
 EXPOSE 8086
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://localhost:8086/health || exit 1
 
-CMD ["uvicorn", "agent_secretary.app:app", "--host", "0.0.0.0", "--port", "8086"]
+CMD ["uvicorn", "secretary.main:app", "--host", "0.0.0.0", "--port", "8086"]

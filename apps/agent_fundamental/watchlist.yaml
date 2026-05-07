@@ -1,0 +1,18 @@
+# Initial watchlist seed (workflow 11 §2.2). Extend toward 50 names.
+- ticker: INTC
+  venue: NASDAQ
+  sector: Semiconductors
+  thesis_tag: turnaround
+  peers: [AMD, NVDA, QCOM, AVGO, TXN]
+
+- ticker: 0700.HK
+  venue: HKEX
+  sector: Internet
+  thesis_tag: dominant_platform
+  peers: [9988.HK, BABA, JD, PDD]
+
+- ticker: BHP
+  venue: NYSE
+  sector: Mining
+  thesis_tag: commodity_cycle
+  peers: [RIO, VALE]

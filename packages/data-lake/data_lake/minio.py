@@ -68,7 +68,8 @@ def get_object_bytes(bucket: str, key: str) -> bytes:
     c = client()
     response = c.get_object(bucket, key)
     try:
-        return response.read()
+        data: bytes = response.read()
+        return data
     finally:
         response.close()
         response.release_conn()

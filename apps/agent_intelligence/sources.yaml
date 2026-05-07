@@ -1,0 +1,42 @@
+# Initial seed (workflow 10 §2.4) — populate to ≥90 entries during Phase 1.
+# region_weight pulls down sources from over-represented regions so the
+# bias-balance metric stays under 0.55 per region (§5.10 hard rule).
+- id: rss:reuters_business
+  url: https://feeds.reuters.com/reuters/businessNews
+  region: GLOBAL
+  lean: center
+  region_weight: 1.0
+  rate_limit: 60_per_hour
+  language: en
+
+- id: rss:wsj_markets
+  url: https://feeds.a.dj.com/rss/RSSMarketsMain.xml
+  region: US
+  lean: center
+  region_weight: 0.7
+  rate_limit: 60_per_hour
+  language: en
+
+- id: rss:scmp_business
+  url: https://www.scmp.com/rss/92/feed
+  region: HK
+  lean: center
+  region_weight: 1.0
+  rate_limit: 60_per_hour
+  language: en
+
+- id: rss:caixin_global
+  url: https://www.caixinglobal.com/rss/news.xml
+  region: CN
+  lean: center
+  region_weight: 1.0
+  rate_limit: 60_per_hour
+  language: en
+
+- id: rss:ft_companies
+  url: https://www.ft.com/companies?format=rss
+  region: GLOBAL
+  lean: center
+  region_weight: 0.8
+  rate_limit: 60_per_hour
+  language: en

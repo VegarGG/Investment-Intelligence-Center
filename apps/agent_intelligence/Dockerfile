@@ -14,11 +14,12 @@ RUN apt-get update \
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
-COPY agent_intelligence/ ./agent_intelligence/
+COPY intel/ ./intel/
+COPY sources.yaml ./sources.yaml
 
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://localhost:8081/health || exit 1
 
-CMD ["uvicorn", "agent_intelligence.app:app", "--host", "0.0.0.0", "--port", "8081"]
+CMD ["uvicorn", "intel.main:app", "--host", "0.0.0.0", "--port", "8081"]

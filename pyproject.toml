@@ -38,7 +38,12 @@ select = [
   "ASYNC",              # async lint
   "S",                  # bandit basics
 ]
-ignore = ["S101"]       # allow assert in tests
+ignore = [
+  "S101",   # allow assert in tests
+  "RUF001", # ambiguous string chars — workflow docs use CJK + math glyphs intentionally
+  "RUF002", # ditto for docstrings
+  "RUF003", # ditto for comments
+]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S"]
@@ -55,10 +60,36 @@ warn_unreachable = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 explicit_package_bases = true
+namespace_packages = true
+mypy_path = [
+  "packages/data-lake",
+  "packages/schema",
+  "packages/llm-client",
+  "packages/data-bus",
+  "packages/prompts",
+  "packages/notifier",
+  "apps/orchestrator",
+  "apps/agent_intelligence",
+  "apps/agent_fundamental",
+  "apps/agent_quant",
+  "apps/agent_persona",
+  "apps/agent_backtest",
+  "apps/agent_secretary",
+]
 exclude = ["apps/dashboard", ".*/tests/.*"]
 
 [[tool.mypy.overrides]]
-module = ["nats.*", "chromadb.*", "vectorbt.*", "apscheduler.*"]
+module = [
+  "nats.*",
+  "chromadb.*",
+  "vectorbt.*",
+  "apscheduler.*",
+  "feedparser",
+  "alembic",
+  "alembic.*",
+  "minio",
+  "minio.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -74,4 +105,13 @@ pythonpath = [
   "packages/prompts",
   "packages/notifier",
   "apps/orchestrator",
+  "apps/agent_intelligence",
+  "apps/agent_fundamental",
+  "apps/agent_quant",
+  "apps/agent_persona",
+  "apps/agent_backtest",
+  "apps/agent_secretary",
+]
+markers = [
+  "integration: requires live infra (PG/NATS/Chroma/Redis); set IIC_INTEGRATION=1",
 ]

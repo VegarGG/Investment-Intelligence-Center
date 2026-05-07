@@ -14,11 +14,11 @@ RUN apt-get update \
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
-COPY agent_quant/ ./agent_quant/
+COPY quant/ ./quant/
 
 EXPOSE 8083
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://localhost:8083/health || exit 1
 
-CMD ["uvicorn", "agent_quant.app:app", "--host", "0.0.0.0", "--port", "8083"]
+CMD ["uvicorn", "quant.main:app", "--host", "0.0.0.0", "--port", "8083"]

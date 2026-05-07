@@ -96,7 +96,7 @@ class AdviceMerger:
 
         # Validate via the canonical Pydantic model.
         try:
-            from schema import AdviceV1  # type: ignore[import-not-found]
+            from schema import AdviceV1
 
             AdviceV1.model_validate(payload)
         except Exception as exc:

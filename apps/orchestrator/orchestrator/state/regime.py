@@ -23,4 +23,4 @@ def regime_from_digest(digest: dict[str, Any] | Any) -> str:
         value = digest.get("macro_regime", "unknown")
     else:
         value = "unknown"
-    return value if value in VALID_REGIMES else "unknown"
+    return str(value) if value in VALID_REGIMES else "unknown"
