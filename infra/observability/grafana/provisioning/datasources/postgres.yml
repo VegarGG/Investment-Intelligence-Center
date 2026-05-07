@@ -1,0 +1,15 @@
+apiVersion: 1
+datasources:
+  - name: IIC-Postgres
+    type: postgres
+    uid: iic_postgres
+    access: proxy
+    url: postgres:5432
+    user: ${IIC_PG_RO_USER}
+    secureJsonData:
+      password: ${IIC_PG_RO_PASSWORD}
+    jsonData:
+      database: iic
+      sslmode: require
+      postgresVersion: 1600
+      timescaledb: true

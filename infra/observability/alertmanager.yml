@@ -1,0 +1,24 @@
+# Workflow 30 §6.5 — Alertmanager routing.
+# Every alert lands at the Secretary, which converts to secretary.notify.v1
+# and lets the notifier package fan out per workflow 20 §6.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 6h
+  receiver: "iic-secretary"
+
+receivers:
+  - name: "iic-secretary"
+    webhook_configs:
+      - url: "http://agent_secretary:8086/notifier/alertmanager"
+        send_resolved: true
+
+inhibit_rules:
+  - source_match: { severity: critical }
+    target_match: { severity: warn }
+    equal: ["alertname"]

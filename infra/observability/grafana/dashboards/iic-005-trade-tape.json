@@ -1,0 +1,37 @@
+{
+  "uid": "iic-005-trade-tape",
+  "title": "IIC — Trade Tape",
+  "tags": ["iic", "trade"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-7d", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Open positions",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 10 },
+      "datasource": { "uid": "iic_postgres", "type": "postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT advice_id, agent, ticker, direction, fill_px AS entry_px, target_band[0] AS target_low, target_band[1] AS target_high, stop_loss, opened_at, unrealized_pnl_usd FROM lake.backtest_positions WHERE state = 'open' ORDER BY opened_at DESC",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Recent fills",
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 10 },
+      "datasource": { "uid": "iic_postgres", "type": "postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT closed_at, agent, ticker, direction, exit_reason, pnl_r, pnl_usd FROM lake.backtest_positions WHERE state = 'closed' ORDER BY closed_at DESC LIMIT 50",
+          "format": "table"
+        }
+      ]
+    }
+  ]
+}

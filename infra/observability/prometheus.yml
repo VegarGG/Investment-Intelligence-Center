@@ -1,7 +1,17 @@
-# Phase-0 minimal Prometheus config. Real scrape targets land in workflow 30.
+# Workflow 30 §6.1 — full scrape topology + rule loading.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  external_labels:
+    cluster: iic-prod
+
+rule_files:
+  - /etc/prometheus/alerts/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
 
 scrape_configs:
   - job_name: prometheus
@@ -12,14 +22,20 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:8080"]
 
-  # node_exporter runs on the host (not a container); workflow 01 §5.2 step 4
-  # installs prometheus-node-exporter via apt.
+  # node_exporter runs on the host (apt-installed per workflow 01 §5.2 step 4).
   - job_name: node_exporter
     static_configs:
       - targets: ["host.docker.internal:9100"]
 
-  # Agent /health endpoints — wired into Prometheus via the FastAPI default
-  # metrics endpoint when each agent gets its instrumentation in workflow 30.
+  - job_name: postgres_exporter
+    static_configs:
+      - targets: ["postgres_exporter:9187"]
+
+  - job_name: nats_exporter
+    static_configs:
+      - targets: ["nats_exporter:7777"]
+
+  # Each agent service exposes /metrics via prometheus-fastapi-instrumentator.
   - job_name: iic_agents
     metrics_path: /metrics
     static_configs:
@@ -31,3 +47,8 @@ scrape_configs:
           - "agent_persona:8084"
           - "agent_backtest:8085"
           - "agent_secretary:8086"
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: "([^:]+):.*"
+        target_label: service
+        replacement: "$1"

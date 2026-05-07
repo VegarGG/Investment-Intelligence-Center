@@ -1,0 +1,61 @@
+{
+  "uid": "iic-006-eval",
+  "title": "IIC — Eval Drift",
+  "tags": ["iic", "eval"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1h",
+  "time": { "from": "now-12w", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Mean rubric score per caller (12 weeks)",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 10 },
+      "datasource": { "uid": "iic_postgres", "type": "postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT ts AS time, caller_id AS metric, mean_score AS value FROM lake.eval_runs ORDER BY 1",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Regression flags timeline",
+      "gridPos": { "x": 0, "y": 10, "w": 12, "h": 10 },
+      "datasource": { "uid": "iic_postgres", "type": "postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT ts, caller_id, prompt_version, mean_score, baseline_score FROM lake.eval_runs WHERE regression_flag = true ORDER BY ts DESC LIMIT 50",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Latest score vs 4-week baseline",
+      "gridPos": { "x": 12, "y": 10, "w": 12, "h": 10 },
+      "datasource": { "uid": "iic_postgres", "type": "postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT DISTINCT ON (caller_id) caller_id AS metric, (mean_score - baseline_score) AS value FROM lake.eval_runs WHERE baseline_score IS NOT NULL ORDER BY caller_id, ts DESC",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": -0.05, "color": "yellow" },
+              { "value": 0, "color": "green" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

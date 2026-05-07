@@ -1,0 +1,74 @@
+{
+  "uid": "iic-003-data-freshness",
+  "title": "IIC — Data Freshness",
+  "tags": ["iic", "data"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Feed lag (seconds since last ingest, by source)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "time() - max by (source_id) (iic_intel_last_ingest_seconds)",
+          "legendFormat": "{{ source_id }}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Dedupe drops / 5m",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (source_id) (rate(iic_dedupe_dropped_total[5m]))",
+          "legendFormat": "{{ source_id }}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "bargauge",
+      "title": "Bias balance — region share (7d avg)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "avg_over_time(iic_bias_region_share[7d])",
+          "legendFormat": "{{ region }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 0.45, "color": "yellow" },
+              { "value": 0.55, "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Factor freshness (s since last build)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "time() - max by (factor_id) (iic_factor_build_last_seconds)",
+          "legendFormat": "{{ factor_id }}"
+        }
+      ]
+    }
+  ]
+}

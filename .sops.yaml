@@ -1,0 +1,14 @@
+# Workflow 31 §3.1 — sops + age encryption rules.
+#
+# Replace the placeholder age recipient with the real key from
+# `age-keygen -o /etc/iic/age.key`. The corresponding private key is
+# kept off the box (paper wallet + USB), per workflow 31 §2.5.
+
+creation_rules:
+  - path_regex: \.env(\.sops)?$
+    encrypted_regex: "^(.+)$"
+    age: age1placeholderpublickeyreplaceonprovisioning0000000000000000
+
+  - path_regex: secrets\/.+\.ya?ml$
+    encrypted_regex: "^(api_key|password|token|secret|aes_key)$"
+    age: age1placeholderpublickeyreplaceonprovisioning0000000000000000

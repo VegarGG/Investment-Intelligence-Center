@@ -1,0 +1,37 @@
+{
+  "uid": "iic-004-investment",
+  "title": "IIC — Investment Leaderboard",
+  "tags": ["iic", "investment"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "time": { "from": "now-30d", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Per-agent attribution (latest)",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 10 },
+      "datasource": { "uid": "iic_postgres", "type": "postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT agent, hit_rate, r_avg, sharpe, max_dd_pct, score, provisional FROM lake.backtest_attribution_daily WHERE asof_date = (SELECT MAX(asof_date) FROM lake.backtest_attribution_daily) ORDER BY score DESC",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Cumulative pnl_r per agent",
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 10 },
+      "datasource": { "uid": "iic_postgres", "type": "postgres" },
+      "targets": [
+        {
+          "rawSql": "SELECT asof_date AS time, agent AS metric, sum(pnl_r) OVER (PARTITION BY agent ORDER BY asof_date) AS value FROM lake.backtest_attribution_daily ORDER BY 1",
+          "format": "time_series"
+        }
+      ]
+    }
+  ]
+}

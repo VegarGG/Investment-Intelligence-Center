@@ -1,0 +1,70 @@
+{
+  "uid": "iic-002-host",
+  "title": "IIC — Host",
+  "tags": ["iic", "host"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "CPU temperature (°C)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "node_hwmon_temp_celsius{chip=~\".*coretemp.*\"}",
+          "legendFormat": "{{ sensor }}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "NVMe wear (%)",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        { "expr": "node_nvme_info_storage_percentage_used", "legendFormat": "{{ device }}" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "RAM usage (%)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "legendFormat": "RAM"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "/srv/iic free",
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "node_filesystem_avail_bytes{mountpoint=\"/srv/iic\"} / node_filesystem_size_bytes{mountpoint=\"/srv/iic\"}",
+          "legendFormat": "free"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["last"] } },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "UPS battery (%)",
+      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [{ "expr": "apcaccess_battery_charge_percent", "legendFormat": "battery" }]
+    }
+  ]
+}

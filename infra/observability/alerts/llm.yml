@@ -1,0 +1,37 @@
+# LLM + agent alerts (workflow 30 §2.3).
+groups:
+  - name: iic-llm
+    interval: 30s
+    rules:
+      - alert: LLM_COST_BREAKER_OPEN
+        expr: iic_llm_cost_breaker_state{state="open"} == 1
+        for: 1m
+        labels:
+          severity: alert
+          code: LLM_COST_BREAKER_OPEN
+        annotations:
+          summary: "Cost breaker is OPEN — LLM paused"
+          runbook: docs/runbooks/runbook-llm-cost-breaker-open.md
+
+      - alert: LLM_LATENCY_P95_HIGH
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(iic_llm_latency_seconds_bucket{tier="pro"}[5m])) by (le)
+          ) > 60
+        for: 10m
+        labels:
+          severity: warn
+          code: LLM_LATENCY_P95_HIGH
+        annotations:
+          summary: "LLM Pro p95 latency >60s for 10m"
+
+      - alert: AGENT_HEARTBEAT_MISSED
+        expr: |
+          time() - max by (service) (iic_heartbeat_last_seen_seconds) > 300
+        for: 1m
+        labels:
+          severity: alert
+          code: AGENT_HEARTBEAT_MISSED
+        annotations:
+          summary: "No ops.heartbeat.v1 from {{ $labels.service }} in 5m"
+          runbook: docs/runbooks/runbook-agent-heartbeat-missed.md

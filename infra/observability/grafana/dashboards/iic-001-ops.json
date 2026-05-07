@@ -1,0 +1,58 @@
+{
+  "uid": "iic-001-ops",
+  "title": "IIC — Operations",
+  "tags": ["iic"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Service heartbeats",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 4 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        { "expr": "up{job=\"iic_agents\"}", "legendFormat": "{{ service }}" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["last"] }, "colorMode": "value" }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "LLM cost burn (USD, 30d rolling)",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        { "expr": "iic_llm_cost_usd_30d", "legendFormat": "{{ tier }}" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Advices emitted (rate / 5m)",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (agent) (rate(iic_advices_emitted_total[5m]))",
+          "legendFormat": "{{ agent }}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Rate-limit headroom (per provider)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus", "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "iic_rate_limiter_remaining{provider=~\".+\"}",
+          "legendFormat": "{{ provider }}"
+        }
+      ]
+    }
+  ]
+}

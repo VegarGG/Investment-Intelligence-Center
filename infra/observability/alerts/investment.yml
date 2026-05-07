@@ -1,0 +1,14 @@
+# Investment + eval alerts (workflow 30 §2.3 + §4).
+groups:
+  - name: iic-investment
+    interval: 60s
+    rules:
+      - alert: PROMPT_EVAL_REGRESSION
+        expr: iic_eval_regression_flag == 1
+        for: 1m
+        labels:
+          severity: alert
+          code: PROMPT_EVAL_REGRESSION
+        annotations:
+          summary: "Caller {{ $labels.caller_id }} regressed >10% vs 4-week baseline"
+          runbook: docs/runbooks/runbook-prompt-eval-regression.md

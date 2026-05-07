@@ -1,0 +1,25 @@
+# Workflow 30 §6.3 — Tempo single-binary config.
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+compactor:
+  compaction:
+    block_retention: 168h  # 7d for now; bump if Tempo storage permits
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tempo/blocks
+    wal:
+      path: /tempo/wal

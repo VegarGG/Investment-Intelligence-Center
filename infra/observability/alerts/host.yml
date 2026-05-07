@@ -1,0 +1,96 @@
+# Host-level alerts (workflow 30 §2.3).
+groups:
+  - name: iic-host
+    interval: 30s
+    rules:
+      - alert: HOST_DOWN
+        expr: up{job="node_exporter"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          code: HOST_DOWN
+        annotations:
+          summary: "node_exporter scrape failure for >3m"
+          runbook: docs/runbooks/runbook-host-down.md
+
+      - alert: NVME_WEAR_HIGH
+        expr: node_nvme_info_storage_percentage_used > 70
+        for: 5m
+        labels:
+          severity: warn
+          code: NVME_WEAR_HIGH
+        annotations:
+          summary: "NVMe wear >70%"
+          runbook: docs/runbooks/runbook-nvme-wear-high.md
+
+      - alert: NVME_WEAR_CRITICAL
+        expr: node_nvme_info_storage_percentage_used > 80
+        for: 5m
+        labels:
+          severity: critical
+          code: NVME_WEAR_CRITICAL
+        annotations:
+          summary: "NVMe wear >80% — replace drive"
+          runbook: docs/runbooks/runbook-nvme-wear-high.md
+
+      - alert: NVME_TEMP_HIGH
+        expr: node_hwmon_temp_celsius{chip=~".*nvme.*"} > 70
+        for: 5m
+        labels:
+          severity: warn
+          code: NVME_TEMP_HIGH
+        annotations:
+          summary: "NVMe sustained >70°C"
+
+      - alert: CPU_TEMP_HIGH
+        expr: node_hwmon_temp_celsius{chip=~".*coretemp.*"} > 90
+        for: 5m
+        labels:
+          severity: warn
+          code: CPU_TEMP_HIGH
+        annotations:
+          summary: "CPU sustained >90°C"
+
+      - alert: DISK_FREE_LOW
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/srv/iic"}
+           / node_filesystem_size_bytes{mountpoint="/srv/iic"}) < 0.15
+        for: 5m
+        labels:
+          severity: warn
+          code: DISK_FREE_LOW
+        annotations:
+          summary: "/srv/iic <15% free"
+
+      - alert: DISK_FREE_CRITICAL
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/srv/iic"}
+           / node_filesystem_size_bytes{mountpoint="/srv/iic"}) < 0.05
+        for: 1m
+        labels:
+          severity: critical
+          code: DISK_FREE_CRITICAL
+        annotations:
+          summary: "/srv/iic <5% free"
+          runbook: docs/runbooks/runbook-disk-free-critical.md
+
+      - alert: UPS_BATTERY_LOW
+        expr: |
+          apcaccess_battery_charge_percent < 50
+          and apcaccess_status_online == 0
+        for: 1m
+        labels:
+          severity: critical
+          code: UPS_BATTERY_LOW
+        annotations:
+          summary: "UPS battery <50% on battery power"
+          runbook: docs/runbooks/runbook-ups-battery-low.md
+
+      - alert: BACKUP_FAILED
+        expr: time() - iic_restic_last_success_seconds > 36 * 3600
+        labels:
+          severity: alert
+          code: BACKUP_FAILED
+        annotations:
+          summary: "restic last successful backup >36h ago"
+          runbook: docs/runbooks/runbook-backup-failed.md

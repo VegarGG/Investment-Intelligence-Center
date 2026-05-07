@@ -8,6 +8,11 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 
 from .auth import is_allowed
+from .inbound.alertmanager import (
+    BadAlertmanagerPayload,
+    parse_payload,
+    render_all,
+)
 from .inbound.slash_commands import UnknownSlash, dispatch
 from .inbound.wecom_callback import verify
 
@@ -68,3 +73,25 @@ async def wecom_inbound(request: Request) -> dict[str, Any]:
         return {"status": "unknown_slash"}
     except ValueError:
         return {"status": "ignored"}
+
+
+@app.post("/notifier/alertmanager")
+async def alertmanager_webhook(request: Request) -> dict[str, Any]:
+    """Workflow 30 §6.5 — Alertmanager → secretary.notify.v1 bridge."""
+    try:
+        payload = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid JSON: {exc}") from exc
+    try:
+        alerts = parse_payload(payload)
+    except BadAlertmanagerPayload as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    notifications = render_all(alerts)
+    # Real wiring publishes each notification to the bus; the test surface
+    # exposes the count + severities so we can assert mapping behavior.
+    return {
+        "status": "ok",
+        "notifications": [
+            {"severity": n.severity, "channel_hint": n.channel_hint} for n in notifications
+        ],
+    }

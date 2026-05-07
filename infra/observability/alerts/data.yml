@@ -1,0 +1,35 @@
+# Data-layer alerts (workflow 30 §2.3).
+groups:
+  - name: iic-data
+    interval: 60s
+    rules:
+      - alert: BIAS_BALANCE_SKEW
+        expr: max by (region) (avg_over_time(iic_bias_region_share[7d])) > 0.55
+        for: 1h
+        labels:
+          severity: warn
+          code: BIAS_BALANCE_SKEW
+        annotations:
+          summary: "Region {{ $labels.region }} >55% of digest weight (7d avg)"
+          runbook: docs/runbooks/runbook-bias-balance-skew.md
+
+      - alert: MARK_FEED_STALE
+        expr: |
+          max by (ticker) (time() - iic_position_mark_last_seconds) > 300
+          and iic_market_open == 1
+        for: 5m
+        labels:
+          severity: warn
+          code: MARK_FEED_STALE
+        annotations:
+          summary: "Mark age >5m for {{ $labels.ticker }} during market hours"
+          runbook: docs/runbooks/runbook-mark-feed-stale.md
+
+      - alert: ADVICE_LEDGER_BROKEN
+        expr: iic_advice_ledger_chain_status{status="broken"} == 1
+        labels:
+          severity: critical
+          code: ADVICE_LEDGER_BROKEN
+        annotations:
+          summary: "Advice ledger chain integrity FAILED for {{ $labels.agent }}"
+          runbook: docs/runbooks/runbook-advice-ledger-broken.md
