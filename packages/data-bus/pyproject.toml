@@ -3,11 +3,14 @@ name = "iic-data-bus"
 version = "0.1.0"
 description = "NATS JetStream adapter + topic registry (workflow 05)."
 authors = ["Ziwei <watter008@gmail.com>"]
-package-mode = false
 packages = [{ include = "data_bus" }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+pydantic = "^2.9"
+nats-py = "^2.9"
+orjson = "^3.10"
+opentelemetry-api = "^1.27"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]
