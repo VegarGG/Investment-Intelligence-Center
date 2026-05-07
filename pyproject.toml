@@ -54,7 +54,8 @@ strict = true
 warn_unreachable = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-exclude = ["apps/dashboard"]
+explicit_package_bases = true
+exclude = ["apps/dashboard", ".*/tests/.*"]
 
 [[tool.mypy.overrides]]
 module = ["nats.*", "chromadb.*", "vectorbt.*"]

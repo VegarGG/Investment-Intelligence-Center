@@ -3,11 +3,17 @@ name = "iic-llm-client"
 version = "0.1.0"
 description = "DeepSeek v4 Pro+Flash router with Anthropic/Groq fallbacks (workflow 03)."
 authors = ["Ziwei <watter008@gmail.com>"]
-package-mode = false
 packages = [{ include = "llm_client" }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+pydantic = "^2.9"
+httpx = "^0.27"
+structlog = "^24.4"
+redis = "^5.2"
+sqlalchemy = { version = "^2.0", extras = ["asyncio"] }
+asyncpg = "^0.30"
+orjson = "^3.10"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]
