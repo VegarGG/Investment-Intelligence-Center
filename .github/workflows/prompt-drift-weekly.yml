@@ -1,0 +1,68 @@
+# Workflow 04 §5.5 / §6.6 — weekly drift watcher.
+#
+# Runs the full golden set against current stable versions every Monday at
+# 09:00 PT (16:00 UTC). Regression > 10% emits ops.alert.v1 to the WeCom
+# alerts bot via packages/notifier (workflow 20).
+
+name: prompt-drift-weekly
+
+on:
+  schedule:
+    - cron: "0 16 * * 1"  # 09:00 America/Los_Angeles, Monday (winter); 08:00 PDT in summer
+  workflow_dispatch: {}
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            'pydantic>=2.9' 'pyyaml>=6.0' 'jinja2>=3.1' 'packaging>=24.0' \
+            'sqlalchemy[asyncio]>=2.0' 'sqlglot>=25.30' 'orjson>=3.10' \
+            'python-ulid>=3.0' 'fastapi>=0.115' 'httpx>=0.27' 'redis>=5.2' \
+            'minio>=7.2' 'chromadb>=0.5' 'structlog>=24.4' alembic
+
+      - name: Run full eval
+        if: env.DEEPSEEK_API_KEY != ''
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          mkdir -p /tmp/snapshots
+          PYTHONPATH=packages/prompts:packages/llm-client:packages/data-lake:packages/schema \
+            python -m prompts.eval.runner --json --snapshot-dir /tmp/snapshots \
+            > /tmp/eval-weekly.json
+          echo "Mean overall: $(jq '.overall_mean' /tmp/eval-weekly.json)"
+
+      - name: Compare vs last passing baseline
+        if: env.DEEPSEEK_API_KEY != ''
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          # TODO: persist last-passing baseline to MinIO (iic-snapshots-parquet)
+          # so this job can compare. For now: just emit the score.
+          echo "::notice::weekly drift run complete; baseline comparison TBD when MinIO snapshot is wired"
+
+      - name: Notify WeCom on regression
+        if: failure() && env.WECOM_BOT_ALERTS_KEY != ''
+        env:
+          WECOM_BOT_ALERTS_KEY: ${{ secrets.WECOM_BOT_ALERTS_KEY }}
+        run: |
+          curl -fsSL -X POST \
+            "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${WECOM_BOT_ALERTS_KEY}" \
+            -H 'Content-Type: application/json' \
+            -d '{"msgtype":"markdown","markdown":{"content":"⚠️ **prompt drift** — weekly eval regression > 10%. See GitHub Actions for details."}}'
+
+      - name: Skip-if-no-keys notice
+        if: env.DEEPSEEK_API_KEY == ''
+        run: echo "::notice::DEEPSEEK_API_KEY not set; weekly drift watch is a no-op."
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}

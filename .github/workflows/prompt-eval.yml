@@ -1,0 +1,91 @@
+# Workflow 04 §5.4 / §6.6 — PR gate for prompt registry changes.
+#
+# Triggers only when packages/prompts/registry/ is touched. Runs the eval
+# against both the bumped version and the previous stable, then fails the
+# build if regression exceeds the band defined in §2.4.
+#
+# This job needs DeepSeek/Anthropic/Groq API keys to actually run the
+# eval. Without them, the job runs in "diff-only" mode — checks that the
+# bumped version files parse + the immutability gate is honored, but
+# skips the score comparison and prints a notice.
+
+name: prompt-eval
+
+on:
+  pull_request:
+    paths:
+      - "packages/prompts/registry/**"
+      - "packages/prompts/prompts/eval/**"
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            'pydantic>=2.9' 'pyyaml>=6.0' 'jinja2>=3.1' 'packaging>=24.0' \
+            'sqlalchemy[asyncio]>=2.0' 'sqlglot>=25.30' 'orjson>=3.10' \
+            'python-ulid>=3.0' 'fastapi>=0.115' 'httpx>=0.27' 'redis>=5.2' \
+            'minio>=7.2' 'chromadb>=0.5' 'structlog>=24.4' alembic \
+            pytest pytest-asyncio
+
+      - name: Identify bumped versions
+        id: changes
+        run: |
+          # Print every changed file under registry/. CI uses this list to
+          # decide which (caller_id, version) pairs to score.
+          git diff --name-only origin/main...HEAD -- packages/prompts/registry \
+            | tee /tmp/changed-prompts.txt
+          echo "changed_count=$(wc -l < /tmp/changed-prompts.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify frontmatter parses for changed prompts
+        if: steps.changes.outputs.changed_count != '0'
+        run: |
+          PYTHONPATH=packages/prompts python - <<'PY'
+          import sys
+          from pathlib import Path
+          from prompts.frontmatter import parse_file
+          changed = [
+              Path(p) for p in Path('/tmp/changed-prompts.txt').read_text().splitlines()
+              if p.endswith('.md')
+          ]
+          for p in changed:
+              if not p.exists():
+                  print(f"removed: {p}")
+                  continue
+              try:
+                  parsed = parse_file(p)
+                  print(f"OK {p} -> {parsed.frontmatter.caller_id} v{parsed.frontmatter.version}")
+              except Exception as e:
+                  print(f"FAIL {p}: {e}")
+                  sys.exit(1)
+          PY
+
+      - name: Run eval against changed callers
+        if: env.DEEPSEEK_API_KEY != ''
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          # TODO: per workflow 04 §5.4, compare bumped version's mean rubric
+          # score vs previous stable. Bands per §2.4: patch ≤ 1%, minor ≤ 5%,
+          # major free. The runner JSON output drives the comparison.
+          PYTHONPATH=packages/prompts python -m prompts.eval.runner --json \
+            > /tmp/eval-current.json
+          echo "::notice::eval ran $(jq '.total_entries' /tmp/eval-current.json) entries; mean=$(jq '.overall_mean' /tmp/eval-current.json)"
+
+      - name: Notice if no API keys
+        if: env.DEEPSEEK_API_KEY == ''
+        run: echo "::notice::DEEPSEEK_API_KEY not set; skipped scored eval. PR can still merge but will not catch regressions."
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}

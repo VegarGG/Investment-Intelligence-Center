@@ -1,0 +1,665 @@
+# IIC v2.1 prompt-eval golden set (workflow 04 §5.1).
+#
+# Entries are deliberately stub-grade for the seed registry — Pro-as-judge
+# scores them via the rubric, not against an exact reference answer. As real
+# usage accumulates, replace these inputs with anonymized real digests/filings
+# and tighten the rubrics.
+#
+# Coverage: 60 entries × 15 callers = 4 per caller (acceptance ≥ 3 per caller).
+
+# ============================================================ intel.synth (4)
+- id: intel.synth.001
+  caller_id: intel.synth
+  inputs:
+    events_json: '[{"id":"e1","title":"Fed cuts 25 bp","source":"reuters","ts":"2026-05-06T18:00Z"},{"id":"e2","title":"OPEC+ holds production","source":"ft","ts":"2026-05-06T11:00Z"},{"id":"e3","title":"Beijing announces consumer subsidies","source":"xinhua","ts":"2026-05-06T03:00Z"}]'
+    macro_regime: rate_cut
+  rubric:
+    - "Names the Fed cut as the top event"
+    - "Identifies USD weakness as a likely transmission"
+    - "regime_change_score for the top item is >= 0.7"
+    - "Penalizes the state-broadcaster source unless cross-corroborated"
+
+- id: intel.synth.002
+  caller_id: intel.synth
+  inputs:
+    events_json: '[{"id":"e1","title":"NVDA reports Q1 beat","source":"bloomberg"},{"id":"e2","title":"Analyst downgrades NVDA","source":"reuters"},{"id":"e3","title":"Taiwan Strait tensions rise","source":"ft"}]'
+    macro_regime: risk_on
+  rubric:
+    - "Identifies NVDA as the focal asset"
+    - "Surfaces the geopolitical tail risk as a separate item"
+    - "Final paragraph titled 'Today's macro thesis'"
+
+- id: intel.synth.003
+  caller_id: intel.synth
+  inputs:
+    events_json: '[{"id":"e1","title":"BoJ raises rates 25 bp","source":"nikkei"},{"id":"e2","title":"Yen carry unwind accelerates","source":"reuters"}]'
+    macro_regime: stagflation
+  rubric:
+    - "Connects BoJ hike to yen carry unwind"
+    - "Mentions JPY pairs (USDJPY, AUDJPY) as primary_asset_links"
+    - "Acknowledges that the regime hint may be wrong"
+
+- id: intel.synth.004
+  caller_id: intel.synth
+  inputs:
+    events_json: '[{"id":"e1","title":"Empty news day - housekeeping only","source":"misc"}]'
+    macro_regime: unknown
+  rubric:
+    - "Refuses to fabricate signal — says 'insufficient signal' or returns very few items"
+    - "Does not invent regime-change score above 0.3 for trivial items"
+
+# ============================================================ intel.crawler.translate (4)
+- id: intel.translate.001
+  caller_id: intel.crawler.translate
+  inputs:
+    source_lang: zh
+    text: "央行宣布降准50个基点，释放约一万亿元流动性。"
+  rubric:
+    - "Translates to neutral English"
+    - "Preserves '50 basis points' / 'RRR' precisely"
+    - "Preserves the '~1 trillion yuan' figure"
+
+- id: intel.translate.002
+  caller_id: intel.crawler.translate
+  inputs:
+    source_lang: ja
+    text: "日銀の植田総裁は7月会合で政策金利を据え置くと述べた。"
+  rubric:
+    - "Names Governor Ueda correctly"
+    - "Translates 'July meeting' literally"
+    - "Does not editorialize about market reaction"
+
+- id: intel.translate.003
+  caller_id: intel.crawler.translate
+  inputs:
+    source_lang: de
+    text: "Die EZB hob den Leitzins um 25 Basispunkte auf 4,5%."
+  rubric:
+    - "Translates 'ECB' correctly"
+    - "Preserves the '25 basis points' and '4.5%' figures"
+
+- id: intel.translate.004
+  caller_id: intel.crawler.translate
+  inputs:
+    source_lang: ar
+    text: "أعلنت أوبك+ تمديد تخفيضات الإنتاج حتى نهاية العام."
+  rubric:
+    - "Translates 'OPEC+' correctly"
+    - "Preserves the 'until end of year' production-cut extension"
+
+# ============================================================ intel.sentiment.classify (4)
+- id: intel.sentiment.001
+  caller_id: intel.sentiment.classify
+  inputs:
+    ticker: TSLA
+    headline: "Tesla deliveries miss by 8%, shares fall 6% pre-market"
+    body: ""
+  rubric:
+    - "Outputs a single JSON object"
+    - "valence is negative (-0.5 or -1)"
+    - "rationale is <= 20 words"
+
+- id: intel.sentiment.002
+  caller_id: intel.sentiment.classify
+  inputs:
+    ticker: AAPL
+    headline: "Apple opens new R&D center in Bangalore"
+    body: ""
+  rubric:
+    - "valence is neutral or slightly positive (0 to 0.5)"
+    - "Does not invent a price reaction"
+
+- id: intel.sentiment.003
+  caller_id: intel.sentiment.classify
+  inputs:
+    ticker: MSFT
+    headline: "Microsoft beats EPS, raises full-year guide above consensus"
+    body: ""
+  rubric:
+    - "valence is strongly positive (0.5 or 1)"
+    - "Returns valid JSON, no prose preamble"
+
+- id: intel.sentiment.004
+  caller_id: intel.sentiment.classify
+  inputs:
+    ticker: META
+    headline: "Reuters: Meta reportedly tops 4B daily users across apps"
+    body: "Source attribution unclear; Meta declined to comment."
+  rubric:
+    - "Reflects the unverified-attribution context — confidence < 0.7"
+    - "valence is positive but not extreme (0 to 0.5)"
+
+# ============================================================ fund.valuation (4)
+- id: fund.valuation.001
+  caller_id: fund.valuation
+  inputs:
+    ticker: INTC
+    fundamentals_json: '{"revenue_ttm":54.2,"ebit_margin":0.08,"fcf_yield":0.03,"net_debt":18.5}'
+    peers_json: '[{"ticker":"AMD","ev_ebitda":28},{"ticker":"NVDA","ev_ebitda":42},{"ticker":"TSM","ev_ebitda":15}]'
+  rubric:
+    - "Outputs base/bull/bear cases with explicit assumptions"
+    - "Each case names a multiple (P/E or EV/EBITDA)"
+    - "Cites a data_source_id for at least one number"
+    - "Lists at least one catalyst"
+
+- id: fund.valuation.002
+  caller_id: fund.valuation
+  inputs:
+    ticker: KO
+    fundamentals_json: '{"revenue_ttm":47.0,"ebit_margin":0.27,"fcf_yield":0.045,"net_debt":24}'
+    peers_json: '[{"ticker":"PEP","ev_ebitda":18},{"ticker":"MNST","ev_ebitda":24}]'
+  rubric:
+    - "Acknowledges defensive-cyclical with low growth"
+    - "Bear case explicitly cites consumer-staples multiple compression"
+
+- id: fund.valuation.003
+  caller_id: fund.valuation
+  inputs:
+    ticker: SHEL
+    fundamentals_json: '{"revenue_ttm":316,"ebit_margin":0.11,"fcf_yield":0.08}'
+    peers_json: '[{"ticker":"XOM","ev_ebitda":7},{"ticker":"CVX","ev_ebitda":8}]'
+  rubric:
+    - "Treats Shell as cyclical commodity exposure"
+    - "Bull case linked to oil price assumption"
+
+- id: fund.valuation.004
+  caller_id: fund.valuation
+  inputs:
+    ticker: SHOP
+    fundamentals_json: '{"revenue_ttm":7.0,"ebit_margin":0.12,"fcf_yield":0.025}'
+    peers_json: '[{"ticker":"ETSY","ev_ebitda":22}]'
+  rubric:
+    - "Refuses if data missing > 30% — should NOT refuse here (5 fields present)"
+    - "Bull case anchors on revenue growth assumption"
+
+# ============================================================ fund.writer (4)
+- id: fund.writer.001
+  caller_id: fund.writer
+  inputs:
+    ticker: INTC
+    valuation_json: '{"base":{"target":35,"assumptions":["margin recovery","ASP up 6%"]},"bull":{"target":42},"bear":{"target":22}}'
+    macro_context: ""
+  rubric:
+    - "Output is exactly one advice.v1 JSON envelope"
+    - "Includes entry_band, target_band, stop_loss, horizon_days"
+    - "evidence array contains at least one filing-url citation"
+    - "Thesis ≤ 500 words"
+
+- id: fund.writer.002
+  caller_id: fund.writer
+  inputs:
+    ticker: BAC
+    valuation_json: '{"base":{"target":42},"bull":{"target":50},"bear":{"target":30}}'
+    macro_context: "Curve steepening"
+  rubric:
+    - "Direction is long given 25%+ upside in base case"
+    - "stop_loss < entry_band[0]"
+    - "horizon_days between 60 and 365"
+
+- id: fund.writer.003
+  caller_id: fund.writer
+  inputs:
+    ticker: NKE
+    valuation_json: '{"base":{"target":75},"bull":{"target":90},"bear":{"target":55}}'
+    macro_context: "China consumer weakness"
+  rubric:
+    - "Confidence < 0.6 reflecting macro uncertainty"
+    - "max_drawdown_pct ≤ 15"
+
+- id: fund.writer.004
+  caller_id: fund.writer
+  inputs:
+    ticker: XOM
+    valuation_json: '{"base":{"target":120},"bull":{"target":145},"bear":{"target":95}}'
+    macro_context: "OPEC supply discipline"
+  rubric:
+    - "sizing_hint_pct_nav ≤ 5"
+    - "evidence cites OPEC release"
+
+# ============================================================ fund.filings.extract (4)
+- id: fund.filings.extract.001
+  caller_id: fund.filings.extract
+  inputs:
+    filing_kind: 10-K
+    ticker: AAPL
+    chunk_text: "Net sales for fiscal 2026 were $401.2B, up 3% YoY. Services grew 12% to $94.7B. Greater China revenue declined 4% to $66.1B."
+  rubric:
+    - "Extracts $401.2B net sales label"
+    - "Extracts $94.7B Services revenue"
+    - "Does not infer beyond the chunk text"
+
+- id: fund.filings.extract.002
+  caller_id: fund.filings.extract
+  inputs:
+    filing_kind: 8-K
+    ticker: BA
+    chunk_text: "On April 28, 2026, the Company announced that the FAA grounded the 737 MAX 9 fleet pending door-plug inspections."
+  rubric:
+    - "Surfaces the FAA grounding as a risk factor"
+    - "Captures the date 2026-04-28"
+
+- id: fund.filings.extract.003
+  caller_id: fund.filings.extract
+  inputs:
+    filing_kind: 10-Q
+    ticker: NVDA
+    chunk_text: "Q1 FY27 data center revenue was $26.0B (+87% YoY). Gaming was $2.6B (-8% YoY). Forward-looking: management expects data center growth to remain elevated in Q2."
+  rubric:
+    - "Captures both segment revenues with units"
+    - "Lists the 'data center growth elevated in Q2' as forward-looking"
+
+- id: fund.filings.extract.004
+  caller_id: fund.filings.extract
+  inputs:
+    filing_kind: 20-F
+    ticker: BABA
+    chunk_text: "Annual GMV grew 7%. Risk factors include intensified VIE-structure scrutiny by U.S. regulators."
+  rubric:
+    - "Extracts 7% GMV growth"
+    - "Risks array includes the VIE-structure regulatory mention"
+
+# ============================================================ quant.writer (4)
+- id: quant.writer.001
+  caller_id: quant.writer
+  inputs:
+    ticker: SPY
+    factor_breakdown_json: '{"momentum_12_1":1.8,"vrp":0.5,"sector_rs":1.1}'
+    regime: risk_on
+  rubric:
+    - "Output is exactly one advice.v1 JSON envelope"
+    - "Thesis ≤ 80 words"
+    - "Names which factor dominated"
+
+- id: quant.writer.002
+  caller_id: quant.writer
+  inputs:
+    ticker: META
+    factor_breakdown_json: '{"momentum_12_1":-0.4,"mean_reversion_5d":2.1,"vrp":0.0}'
+    regime: risk_off
+  rubric:
+    - "Direction reflects mean-reversion (likely long after sell-off)"
+    - "Confidence is moderate, not extreme"
+
+- id: quant.writer.003
+  caller_id: quant.writer
+  inputs:
+    ticker: BTC-USD
+    factor_breakdown_json: '{"crypto_basis":-1.5,"momentum_12_1":0.8}'
+    regime: stagflation
+  rubric:
+    - "Surfaces basis as the dominant factor"
+    - "Regime-conditional risk explicitly mentioned"
+
+- id: quant.writer.004
+  caller_id: quant.writer
+  inputs:
+    ticker: GLD
+    factor_breakdown_json: '{"momentum_12_1":1.2,"sector_rs":0.7}'
+    regime: crisis
+  rubric:
+    - "Direction is long (gold + crisis)"
+    - "Acknowledges regime-conditional tailwind"
+
+# ============================================================ persona.daily.base (4)
+- id: persona.daily.001
+  caller_id: persona.daily.base
+  inputs:
+    persona_slug: rogers
+    persona_priors_md: "- Buy what's hated; sell what's loved.\n- Commodities lead inflation."
+    digest_excerpt: "Top item: oil up 4% on OPEC discipline. Copper up 3%."
+  rubric:
+    - "Stays in Rogers's contrarian/commodity voice"
+    - "Ends with the exact disclaimer line"
+    - "Returns 0–2 advice.v1 envelopes (or empty array with reason)"
+
+- id: persona.daily.002
+  caller_id: persona.daily.base
+  inputs:
+    persona_slug: buffett
+    persona_priors_md: "- Quality + moat + low turnover."
+    digest_excerpt: "KO and PEP held flat; broader market down 1%."
+  rubric:
+    - "Tone matches Buffett — patient, moat-oriented"
+    - "If no conviction, returns empty array with one-line explanation"
+    - "Disclaimer line present"
+
+- id: persona.daily.003
+  caller_id: persona.daily.base
+  inputs:
+    persona_slug: soros
+    persona_priors_md: "- Reflexivity. - Spot regime changes."
+    digest_excerpt: "Yen carry unwind accelerating; AUDJPY -2%."
+  rubric:
+    - "Surfaces the reflexive feedback in the FX move"
+    - "Disclaimer line present"
+
+- id: persona.daily.004
+  caller_id: persona.daily.base
+  inputs:
+    persona_slug: degen
+    persona_priors_md: "- Momentum-chasing, social-driven."
+    digest_excerpt: "GME spiking on Reddit chatter; meme basket up 9%."
+  rubric:
+    - "Reflects retail-degen voice (high beta, short horizon)"
+    - "Confidence is moderate (not laughably high)"
+    - "Disclaimer line present"
+
+# ============================================================ persona.weekly.base (4)
+- id: persona.weekly.001
+  caller_id: persona.weekly.base
+  inputs:
+    persona_slug: druckenmiller
+    persona_priors_md: "- Top-down macro, concentrated."
+    weekly_digest: "Curve steepened; Fed signaling pause; commodities mixed."
+    leaderboard_excerpt: "druckenmiller: Sharpe 0.4, hit-rate 52%."
+  rubric:
+    - "Identifies one or two themes for next 30–90 days"
+    - "Includes 'what I am avoiding this week and why'"
+    - "Disclaimer line present"
+
+- id: persona.weekly.002
+  caller_id: persona.weekly.base
+  inputs:
+    persona_slug: dalio
+    persona_priors_md: "- All-weather. - Debt cycles."
+    weekly_digest: "USD index +2%; gold consolidating; long-end yields rising."
+    leaderboard_excerpt: "dalio: Sharpe 0.3, hit-rate 48%."
+  rubric:
+    - "Output reflects all-weather diversification language"
+    - "Avoids extreme conviction calls"
+
+- id: persona.weekly.003
+  caller_id: persona.weekly.base
+  inputs:
+    persona_slug: burry
+    persona_priors_md: "- Deep-value contrarian. - Bubble shorting."
+    weekly_digest: "Mag7 narrowing leadership; small-cap value diverges higher."
+    leaderboard_excerpt: "burry: Sharpe 0.2, hit-rate 41%."
+  rubric:
+    - "Surfaces the small-cap-value rotation"
+    - "Tone is wary, not euphoric"
+
+- id: persona.weekly.004
+  caller_id: persona.weekly.base
+  inputs:
+    persona_slug: wood
+    persona_priors_md: "- Disruptive innovation, high beta."
+    weekly_digest: "Robotaxi pilot in Phoenix expanded; ARKK +6% week."
+    leaderboard_excerpt: "wood: Sharpe -0.1, hit-rate 39%."
+  rubric:
+    - "Output references disruption-thematic conviction"
+    - "Acknowledges drawdown discipline"
+
+# ============================================================ backtest.narrate (4)
+- id: backtest.narrate.001
+  caller_id: backtest.narrate
+  inputs:
+    agent: persona.rogers
+    ticker: COPX
+    entry_px: 38.0
+    exit_px: 41.5
+    pnl_r: 1.2
+    exit_reason: target
+    max_dd_pct: 3.4
+  rubric:
+    - "Exactly two sentences, ≤ 45 words total"
+    - "Past tense"
+    - "Second sentence states a specific lesson"
+
+- id: backtest.narrate.002
+  caller_id: backtest.narrate
+  inputs:
+    agent: quant.momentum
+    ticker: NVDA
+    entry_px: 850
+    exit_px: 805
+    pnl_r: -0.8
+    exit_reason: stop
+    max_dd_pct: 6.0
+  rubric:
+    - "Acknowledges the stop-out without melodrama"
+    - "Lesson is concrete (not 'manage risk better')"
+
+- id: backtest.narrate.003
+  caller_id: backtest.narrate
+  inputs:
+    agent: fund.valuation
+    ticker: BAC
+    entry_px: 36
+    exit_px: 36.05
+    pnl_r: 0.02
+    exit_reason: expiry
+    max_dd_pct: 2.1
+  rubric:
+    - "Frames expiry without action as a non-event"
+    - "Lesson on horizon calibration"
+
+- id: backtest.narrate.004
+  caller_id: backtest.narrate
+  inputs:
+    agent: persona.degen
+    ticker: GME
+    entry_px: 22
+    exit_px: 28
+    pnl_r: 1.6
+    exit_reason: target
+    max_dd_pct: 12.0
+  rubric:
+    - "Notes the high intra-trade drawdown despite winning"
+    - "Lesson addresses sizing or stop placement"
+
+# ============================================================ secretary.chat (4)
+- id: secretary.chat.001
+  caller_id: secretary.chat
+  inputs:
+    user_message: "What is persona.rogers saying about copper today?"
+    tone: conversational
+  rubric:
+    - "Cites the persona.rogers agent explicitly"
+    - "If unknown, says so in one sentence with a next step"
+
+- id: secretary.chat.002
+  caller_id: secretary.chat
+  inputs:
+    user_message: "今天系统有什么建议？"
+    tone: educational
+  rubric:
+    - "Responds in Chinese (auto-detected)"
+    - "Tone is educational — uses analogies suitable for non-technical reader"
+
+- id: secretary.chat.003
+  caller_id: secretary.chat
+  inputs:
+    user_message: "Why is the leaderboard showing burry at the bottom?"
+    tone: terse
+  rubric:
+    - "Cites the leaderboard table"
+    - "Response is terse (≤ 3 sentences)"
+
+- id: secretary.chat.004
+  caller_id: secretary.chat
+  inputs:
+    user_message: "Show me today's top advice."
+    tone: conversational
+  rubric:
+    - "Cites the lake.advice ledger or intel.synth digest"
+    - "Frames the answer as 'as of <time>'"
+
+# ============================================================ secretary.brief.morning (4)
+- id: secretary.brief.morning.001
+  caller_id: secretary.brief.morning
+  inputs:
+    digest_md: "1. Fed cuts 25 bp.\n2. OPEC holds.\n3. Beijing subsidies."
+    top_advices_md: "- INTC long $89-91 → $95-100, 7d (persona.rogers)"
+    leaderboard_md: "1. quant 0.6 Sharpe\n2. fundamental 0.4"
+    language: en
+  rubric:
+    - "Output is WeCom-flavored markdown, no HTML"
+    - "Contains H2 'Today's calls', 'Macro thesis', 'Leaderboard'"
+    - "Ends with the bilingual disclaimer line"
+    - "≤ 4096 chars"
+
+- id: secretary.brief.morning.002
+  caller_id: secretary.brief.morning
+  inputs:
+    digest_md: "Quiet overnight session."
+    top_advices_md: "(no high-conviction calls)"
+    leaderboard_md: "1. quant 0.6"
+    language: zh
+  rubric:
+    - "Responds in Chinese"
+    - "Brief explicitly notes the quiet session — does not fabricate"
+
+- id: secretary.brief.morning.003
+  caller_id: secretary.brief.morning
+  inputs:
+    digest_md: "Volatility spike; VIX +25%."
+    top_advices_md: "- Reduce SPX exposure (quant)\n- BUY VIXM (persona.druckenmiller)"
+    leaderboard_md: "..."
+    language: en
+  rubric:
+    - "Reflects the elevated-vol regime in tone"
+    - "Lists advices with full price band + horizon + agent"
+
+- id: secretary.brief.morning.004
+  caller_id: secretary.brief.morning
+  inputs:
+    digest_md: "Earnings-heavy day: AAPL, MSFT, GOOG."
+    top_advices_md: "- AAPL into print (fund.valuation)"
+    leaderboard_md: "..."
+    language: en
+  rubric:
+    - "Calls out earnings calendar as the day's frame"
+    - "Disclaimer line present"
+
+# ============================================================ secretary.deep_explain (4)
+- id: secretary.deep_explain.001
+  caller_id: secretary.deep_explain
+  inputs:
+    user_question: "Why did the quant agent flat NVDA today?"
+    agents_consulted: "quant, intel.synth"
+    evidence_md: "- quant 12-1 momentum z=-0.5; vrp z=+0.2.\n- intel: no NVDA news today."
+  rubric:
+    - "Step-by-step trace present"
+    - "Cites the quant factor scores"
+    - "Does not invent news"
+
+- id: secretary.deep_explain.002
+  caller_id: secretary.deep_explain
+  inputs:
+    user_question: "Why do persona.rogers and persona.buffett disagree on COPX?"
+    agents_consulted: "persona.rogers, persona.buffett"
+    evidence_md: "- rogers: long, contrarian commodity thesis.\n- buffett: flat, no moat."
+  rubric:
+    - "Presents the disagreement as a small markdown table"
+    - "Does not collapse to one answer"
+
+- id: secretary.deep_explain.003
+  caller_id: secretary.deep_explain
+  inputs:
+    user_question: "Walk me through how the morning brief was assembled today."
+    agents_consulted: "intel.synth, all advisory agents, secretary.brief.morning"
+    evidence_md: "..."
+  rubric:
+    - "Lists the intel→advisory→secretary chain in order"
+    - "Mentions the cost meter in the trace"
+
+- id: secretary.deep_explain.004
+  caller_id: secretary.deep_explain
+  inputs:
+    user_question: "Why is fund.valuation refusing to opine on TSLA?"
+    agents_consulted: "fund.valuation"
+    evidence_md: "- 4 of 12 fundamental fields missing (33%); refuse-threshold > 30%."
+  rubric:
+    - "Cites the 30% missing-data refusal threshold"
+    - "Step-by-step trace shows the refusal logic"
+
+# ============================================================ orchestrator.plan (4)
+- id: orchestrator.plan.001
+  caller_id: orchestrator.plan
+  inputs:
+    trigger_event_json: '{"kind":"intel.digest.v1","macro_regime":"rate_cut"}'
+    available_agents_json: '[{"id":"fundamental","available":true},{"id":"quant","available":true},{"id":"persona.rogers","available":true}]'
+    sla_seconds: 60
+  rubric:
+    - "Output is one JSON object with keys plan and abort_if"
+    - "All three agents are scheduled"
+    - "depends_on graph is acyclic"
+
+- id: orchestrator.plan.002
+  caller_id: orchestrator.plan
+  inputs:
+    trigger_event_json: '{"kind":"earnings.preopen","ticker":"AAPL"}'
+    available_agents_json: '[{"id":"fundamental","available":true},{"id":"quant","available":false}]'
+    sla_seconds: 30
+  rubric:
+    - "Excludes the unavailable agent"
+    - "abort_if includes a wall-clock condition"
+
+- id: orchestrator.plan.003
+  caller_id: orchestrator.plan
+  inputs:
+    trigger_event_json: '{"kind":"intel.digest.v1"}'
+    available_agents_json: '[{"id":"persona.rogers","available":true},{"id":"persona.buffett","available":true}]'
+    sla_seconds: 90
+  rubric:
+    - "Both personas scheduled in parallel (no fake dependency)"
+    - "Each plan step has a one-line reason"
+
+- id: orchestrator.plan.004
+  caller_id: orchestrator.plan
+  inputs:
+    trigger_event_json: '{"kind":"backtest.fill.v1","agent":"persona.degen"}'
+    available_agents_json: '[{"id":"backtest","available":true},{"id":"secretary","available":true}]'
+    sla_seconds: 15
+  rubric:
+    - "Plan is short (1-2 steps) given the tight SLA"
+    - "Prefers Flash where possible"
+
+# ============================================================ eval.judge (4)
+# These four exercise the judge prompt itself — meta. The 'rubric' below
+# is what an outer judge would use; in practice the judge is locked.
+- id: eval.judge.001
+  caller_id: eval.judge
+  inputs:
+    caller_id_under_test: intel.synth
+    inputs_json: "events_json: 3 events"
+    rubric_md: "1. Names rate cut\n2. regime_change_score >= 0.7"
+    candidate_answer: "1. Fed cuts 25 bp (regime_change_score 0.8). 2. ..."
+  rubric:
+    - "Emits one numbered score per rubric item"
+    - "Scores are in {0.0, 0.5, 1.0}"
+    - "Free-text rationale is 2–4 sentences"
+
+- id: eval.judge.002
+  caller_id: eval.judge
+  inputs:
+    caller_id_under_test: fund.writer
+    inputs_json: "ticker: INTC; valuation: ..."
+    rubric_md: "1. Output is one advice.v1 envelope\n2. Includes citations"
+    candidate_answer: "Here's some prose, not JSON."
+  rubric:
+    - "Scores rubric item 1 as 0.0 (no JSON envelope)"
+    - "Rationale specifically calls out the missing JSON"
+
+- id: eval.judge.003
+  caller_id: eval.judge
+  inputs:
+    caller_id_under_test: secretary.chat
+    inputs_json: "question: today's top advice"
+    rubric_md: "1. Cites the lake.advice ledger\n2. Frames as 'as of <time>'"
+    candidate_answer: "From lake.advice as of 2026-05-06T13:30Z, the top calls are ..."
+  rubric:
+    - "Awards full credit to both items"
+    - "Does not penalize for verbosity"
+
+- id: eval.judge.004
+  caller_id: eval.judge
+  inputs:
+    caller_id_under_test: backtest.narrate
+    inputs_json: "agent: rogers, ticker: COPX, R: 1.2"
+    rubric_md: "1. Exactly two sentences\n2. Past tense"
+    candidate_answer: "Trade closed at +1.2R. Nice."
+  rubric:
+    - "Scores item 1 as 0.5 or 0 (only one and a half sentences)"
+    - "Rationale references the sentence count"
