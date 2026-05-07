@@ -58,7 +58,7 @@ explicit_package_bases = true
 exclude = ["apps/dashboard", ".*/tests/.*"]
 
 [[tool.mypy.overrides]]
-module = ["nats.*", "chromadb.*", "vectorbt.*"]
+module = ["nats.*", "chromadb.*", "vectorbt.*", "apscheduler.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -73,4 +73,5 @@ pythonpath = [
   "packages/data-bus",
   "packages/prompts",
   "packages/notifier",
+  "apps/orchestrator",
 ]
