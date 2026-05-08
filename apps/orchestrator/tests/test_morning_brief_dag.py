@@ -7,10 +7,12 @@ from orchestrator.execute.runner import execute
 from orchestrator.execute.sla import with_sla_timeout
 from orchestrator.plan.agent_client import StubAgentClient
 from orchestrator.plan.morning_brief import build_dag, make_initial_state
+from orchestrator.plan.personas import list_persona_slugs
 
 
 def _stub_responses() -> dict[str, dict]:
-    return {
+    """Build stub responses sourced from the v2.5 T0.2 persona registry."""
+    base: dict[str, dict] = {
         "agent_intelligence": {
             "macro_regime": "rate_cut",
             "events": [{"id": "evt-1", "headline": "Fed cuts 25bp"}],
@@ -19,14 +21,18 @@ def _stub_responses() -> dict[str, dict]:
             "advices": [{"id": "01HX8E5G7M0000000000000001", "agent": "fundamental"}]
         },
         "agent_quant": {"advices": [{"id": "01HX8E5G7M0000000000000002", "agent": "quant"}]},
-        "agent_persona.rogers": {
-            "advices": [{"id": "01HX8E5G7M0000000000000003", "agent": "persona.rogers"}]
-        },
-        "agent_persona.buffett": {"advices": []},
-        "agent_persona.soros": {"advices": []},
-        "agent_persona.druckenmiller": {"advices": []},
         "agent_secretary": {"markdown": "## brief", "ok": True},
     }
+    slugs = list_persona_slugs(force_reload=True)
+    # First persona returns one advice; others return [] so fan-out math stays predictable.
+    for i, slug in enumerate(slugs):
+        if i == 0:
+            base[f"agent_persona.{slug}"] = {
+                "advices": [{"id": "01HX8E5G7M0000000000000003", "agent": f"persona.{slug}"}]
+            }
+        else:
+            base[f"agent_persona.{slug}"] = {"advices": []}
+    return base
 
 
 class TestMorningBriefDag:
@@ -37,8 +43,9 @@ class TestMorningBriefDag:
         state = make_initial_state()
         result = await execute(graph, state, trace_id=state.trace_id, sla_runner=with_sla_timeout)
         assert result.ok
-        # All 8 nodes ran (intel + fundamental + quant + 4 personas + secretary + notify = 9)
-        assert len(result.nodes) == 9
+        # intel + fundamental + quant + N personas + secretary_brief + notify
+        n_personas = len(list_persona_slugs(force_reload=True))
+        assert len(result.nodes) == 5 + n_personas
 
     @pytest.mark.asyncio
     async def test_visits_intel_synth_first(self) -> None:
@@ -59,7 +66,7 @@ class TestMorningBriefDag:
         intel = result.by_name("n_intel_synth")
         brief = result.by_name("n_secretary_brief")
         assert intel is not None and brief is not None
-        for slug in ("rogers", "buffett", "soros", "druckenmiller"):
+        for slug in list_persona_slugs(force_reload=True):
             persona = result.by_name(f"n_persona_{slug}")
             assert persona is not None
             assert persona.started_at >= intel.finished_at - 0.01  # allow tiny clock noise

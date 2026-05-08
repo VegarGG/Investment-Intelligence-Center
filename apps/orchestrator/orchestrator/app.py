@@ -95,6 +95,17 @@ def register_default_dags(client: Any) -> None:
     Tests may build their own client (e.g., StubAgentClient) and call this
     explicitly before invoking route()."""
 
+    from .plan.auxiliary_dags import (
+        _initial,
+        build_backtest_fill_event_dag,
+        build_evening_recap_dag,
+        build_hourly_intel_dag,
+        build_intel_digest_event_dag,
+        build_midday_pulse_dag,
+        build_ops_alert_event_dag,
+        build_weekly_eval_dag,
+    )
+
     async def _morning_brief(ctx: dict[str, Any]) -> DagResult[Any]:
         global _last_completed
         graph = build_dag(client)
@@ -110,6 +121,44 @@ def register_default_dags(client: Any) -> None:
 
     register("cron:morning_brief", _morning_brief)
     register("http:morning_brief", _morning_brief)
+
+    def _make_simple_runner(builder):
+        async def _run(ctx: dict[str, Any]) -> DagResult[Any]:
+            global _last_completed
+            graph = builder(client)
+            state = _initial(trace_id=ctx["trace_id"])
+            result = await execute(
+                graph,
+                state,
+                trace_id=state.trace_id,
+                sla_runner=with_sla_timeout,
+            )
+            _last_completed = result
+            return result
+
+        return _run
+
+    # v2.5 T1.5 — close the silent-drop surface for cron entries.
+    midday = _make_simple_runner(build_midday_pulse_dag)
+    evening = _make_simple_runner(build_evening_recap_dag)
+    hourly = _make_simple_runner(build_hourly_intel_dag)
+    weekly = _make_simple_runner(build_weekly_eval_dag)
+    register("cron:midday_check", midday)
+    register("http:midday_check", midday)
+    register("cron:evening_recap", evening)
+    register("http:evening_recap", evening)
+    register("cron:hourly_intel", hourly)
+    register("http:hourly_intel", hourly)
+    register("cron:weekly_eval", weekly)
+    register("http:weekly_eval", weekly)
+
+    # v2.5 T1.5 — close the silent-drop surface for NATS subjects.
+    intel_event = _make_simple_runner(build_intel_digest_event_dag)
+    fill_event = _make_simple_runner(build_backtest_fill_event_dag)
+    ops_event = _make_simple_runner(build_ops_alert_event_dag)
+    register("event:intel.digest.v1", intel_event)
+    register("event:backtest.fill.v1", fill_event)
+    register("event:ops.alert.v1", ops_event)
 
 
 # ---- HTTP endpoints --------------------------------------------------------
@@ -192,18 +241,17 @@ async def _bootstrap() -> None:
     )
     _idem_store = redis_client  # protocol satisfied: SET NX EX
 
-    client = HttpxAgentClient(
-        {
-            "agent_intelligence": "http://agent_intelligence:8081",
-            "agent_fundamental": "http://agent_fundamental:8082",
-            "agent_quant": "http://agent_quant:8083",
-            "agent_persona.rogers": "http://agent_persona:8084",
-            "agent_persona.buffett": "http://agent_persona:8084",
-            "agent_persona.soros": "http://agent_persona:8084",
-            "agent_persona.druckenmiller": "http://agent_persona:8084",
-            "agent_secretary": "http://agent_secretary:8086",
-        }
-    )
+    from .plan.personas import list_persona_slugs
+
+    base_urls: dict[str, str] = {
+        "agent_intelligence": "http://agent_intelligence:8081",
+        "agent_fundamental": "http://agent_fundamental:8082",
+        "agent_quant": "http://agent_quant:8083",
+        "agent_secretary": "http://agent_secretary:8086",
+    }
+    for slug in list_persona_slugs():
+        base_urls[f"agent_persona.{slug}"] = "http://agent_persona:8084"
+    client = HttpxAgentClient(base_urls)
     register_default_dags(client)
 
     scheduler = build_scheduler(route)

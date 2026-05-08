@@ -18,19 +18,19 @@ import ulid
 from ..execute.runner import StateGraph
 from ..execute.sla import SLA_TABLE
 from .agent_client import AgentClient
+from .personas import list_persona_slugs
 
-DEFAULT_PERSONA_SLUGS: tuple[str, ...] = (
-    "rogers",
-    "buffett",
-    "soros",
-    "druckenmiller",
-)
+
+def _default_persona_slugs() -> tuple[str, ...]:
+    """Reads `docs/prompts/persona/*.yaml`. Drift across YAML, code, and the
+    URL map is prevented by the v2.5 T0.2 source-of-truth helper."""
+    return list_persona_slugs()
 
 
 @dataclass(slots=True)
 class MorningBriefState:
     trace_id: str
-    persona_slugs: tuple[str, ...] = DEFAULT_PERSONA_SLUGS
+    persona_slugs: tuple[str, ...] = field(default_factory=_default_persona_slugs)
     digest: dict[str, Any] | None = None
     macro_regime: str = "unknown"
     advices: list[dict[str, Any]] = field(default_factory=list)
@@ -41,11 +41,11 @@ class MorningBriefState:
 def make_initial_state(
     *,
     trace_id: str | None = None,
-    persona_slugs: tuple[str, ...] = DEFAULT_PERSONA_SLUGS,
+    persona_slugs: tuple[str, ...] | None = None,
 ) -> MorningBriefState:
     return MorningBriefState(
         trace_id=trace_id or str(ulid.ULID()),
-        persona_slugs=persona_slugs,
+        persona_slugs=persona_slugs if persona_slugs is not None else _default_persona_slugs(),
     )
 
 
@@ -111,7 +111,8 @@ def build_dag(
 
     # ---- persona fan-out (one node per slug) ------------------------------
     persona_soft, persona_hard = SLA_TABLE["persona.daily"]
-    for slug in DEFAULT_PERSONA_SLUGS:
+    persona_slugs = _default_persona_slugs()
+    for slug in persona_slugs:
         node_name = f"n_persona_{slug}"
 
         def _make_persona_node(slug_capture: str) -> Any:
@@ -174,11 +175,11 @@ def build_dag(
     g.set_entry("n_intel_synth")
     g.add_edge("n_intel_synth", "n_fundamental")
     g.add_edge("n_intel_synth", "n_quant")
-    for slug in DEFAULT_PERSONA_SLUGS:
+    for slug in persona_slugs:
         g.add_edge("n_intel_synth", f"n_persona_{slug}")
     g.add_edge("n_fundamental", "n_secretary_brief")
     g.add_edge("n_quant", "n_secretary_brief")
-    for slug in DEFAULT_PERSONA_SLUGS:
+    for slug in persona_slugs:
         g.add_edge(f"n_persona_{slug}", "n_secretary_brief")
     g.add_edge("n_secretary_brief", "n_notify")
 

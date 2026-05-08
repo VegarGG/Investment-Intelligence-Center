@@ -27,6 +27,9 @@ SLA_TABLE: dict[str, tuple[float, float]] = {
     "persona.weekly": (60.0, 180.0),
     "secretary.compose_brief": (30.0, 60.0),
     "secretary.chat": (8.0, 20.0),
+    # v2.5 T1.5 — auxiliary DAG SLAs.
+    "backtest.daily": (60.0, 180.0),
+    "backtest.weekly_eval": (120.0, 300.0),
 }
 
 

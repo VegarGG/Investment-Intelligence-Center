@@ -1,9 +1,10 @@
 # IIC Workflow Index — Master Conventions
 
-> **Source plan:** `PLAN_v2.1_Investment_Intelligence_Center.md`
+> **Active plan:** [`plan/IIC_Development_Plan_v2.5_Combined.md`](../plan/IIC_Development_Plan_v2.5_Combined.md) (T0 + T1 partial shipped — see workflow 32)
+> **Origin plan:** [`plan/PLAN_v2.1_Investment_Intelligence_Center.md`](../plan/PLAN_v2.1_Investment_Intelligence_Center.md) (substrate; workflows 00–31)
 > **Status:** Final, ready for vibecoding
 > **Owner:** Ziwei
-> **Scope of this folder:** This index plus 14 sibling workflow docs. Each sibling is a self-contained brief for one component of IIC. Time/week tracking has been deliberately removed — sequence is by **dependency**, not calendar.
+> **Scope of this folder:** This index plus the v2.1 sibling workflow docs (00–31) and the v2.5 changelog docs (32–). Each sibling is a self-contained brief for one component of IIC. Time/week tracking has been deliberately removed — sequence is by **dependency**, not calendar.
 
 ---
 
@@ -48,6 +49,7 @@ Documents are numbered for dependency order. Lower numbers should land before hi
 | 21 | `21_DASHBOARD_UI.md` | React + Tailwind + Recharts dashboard |
 | 30 | `30_OBSERVABILITY_AND_EVAL.md` | Grafana + Loki + Prometheus + eval harness + leaderboard math |
 | 31 | `31_PRODUCTION_HARDENING.md` | DR drill, NAS migration validation, security review, secrets rotation |
+| 32 | `32_V2_5_T0_T1_CHANGELOG.md` | v2.5 T0 + T1 partial — featureflags, persona source-of-truth, ADR-0004, quotes, missing personas, intel startup, DAG coverage, agent breaker |
 
 ---
 
