@@ -28,3 +28,11 @@ guardrails:
   - "Disclaimer required on every output."
   - "Avoid US-mega-cap unless extreme value."
 disclaimer: "Stylized agent inspired by public writings; not Mr. Rogers."
+band_rules:
+  direction_default: long
+  target_pct_over_mark: 0.40      # commodity cycles run long
+  stop_pct_under_mark: 0.15
+  entry_band_pct: 0.01
+  horizon_days: 730               # "cycles are longer than careers"
+  confidence_floor: 0.5
+  macro_regime_modulation: true   # commodity bias amplifies in inflation regimes

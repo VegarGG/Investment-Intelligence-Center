@@ -1,0 +1,70 @@
+name: walk-forward (v2.5 T1.12)
+
+on:
+  pull_request:
+    paths:
+      - 'packages/prompts/registry/**'
+      - 'apps/agent_backtest/backtest/walk_forward.py'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  walk-forward:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install poetry
+        run: pipx install poetry==1.8.3
+
+      - name: Install deps
+        run: poetry install --no-interaction --no-ansi
+
+      - name: Detect override token in PR title
+        id: override
+        run: |
+          title="${{ github.event.pull_request.title }}"
+          if [[ "$title" =~ \[walk-forward\ override:\ (.+)\] ]]; then
+            echo "override=true" >> "$GITHUB_OUTPUT"
+            echo "reason=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "override=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run walk-forward harness
+        id: harness
+        run: |
+          poetry run python -m backtest.walk_forward_cli \
+            --baseline HEAD~1 \
+            --candidate HEAD \
+            --out walk_forward.json
+        continue-on-error: ${{ steps.override.outputs.override == 'true' }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: walk-forward-report
+          path: walk_forward.json
+
+      - name: Fail closed on materially-negative delta
+        if: steps.override.outputs.override != 'true'
+        run: |
+          python - <<'PY'
+          import json, sys
+          d = json.load(open("walk_forward.json"))
+          if d.get("materially_negative"):
+              print("Walk-forward delta is materially negative. Block merge.")
+              print(json.dumps(d, indent=2))
+              sys.exit(1)
+          print("Walk-forward delta OK.")
+          PY

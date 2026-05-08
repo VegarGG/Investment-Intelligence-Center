@@ -5,6 +5,10 @@ v2.5 T1.6 — `HttpxAgentClient` is wrapped by a per-agent circuit breaker.
 When the breaker is open, the client returns
 ``{"advices": [], "_breaker_open": True, "_target": agent}`` so fan-out
 legs degrade gracefully and the morning brief still ships.
+
+v2.5 T2.0 — when feature flag ``orchestrator.use_nats_for_agent_calls`` is
+on, the same client routes through NATS request-reply instead of HTTP.
+The HTTP path stays available as the fallback / chaos-test transport.
 """
 
 from __future__ import annotations
@@ -88,7 +92,9 @@ class HttpxAgentClient:
         if url is None:
             raise KeyError(f"no base URL configured for agent={agent}")
 
-        async def _send() -> dict[str, Any]:
+        use_nats = _should_use_nats()
+
+        async def _send_http() -> dict[str, Any]:
             import httpx
 
             async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -97,11 +103,30 @@ class HttpxAgentClient:
                 data: dict[str, Any] = resp.json()
                 return data
 
+        async def _send_nats() -> dict[str, Any]:
+            from data_bus.request_reply import agent_subject, nats_call
+
+            return await nats_call(
+                agent_subject(agent), payload, timeout_s=self._timeout
+            )
+
+        sender = _send_nats if use_nats else _send_http
+
         try:
-            return await self.breaker.call(agent, _send)
+            return await self.breaker.call(agent, sender)
         except BreakerOpen:
             log.info("agent_breaker target=%s short-circuited; degrading", agent)
             return _breaker_open_response(agent)
 
     def breaker_state(self, agent: str) -> State:
         return self.breaker.state_of(agent)
+
+
+def _should_use_nats() -> bool:
+    """Read the feature flag without forcing every importer to install featureflags."""
+    try:
+        import featureflags
+        import featureflags.registry  # noqa: F401  side-effect: register canonical flags
+    except ImportError:
+        return False
+    return featureflags.flag("orchestrator.use_nats_for_agent_calls")

@@ -28,3 +28,11 @@ guardrails:
   - "Disclaimer required on every output."
   - "Sizing must reflect conviction; default to small unless thesis is strong."
 disclaimer: "Stylized agent inspired by public writings; not Mr. Soros."
+band_rules:
+  direction_default: long
+  target_pct_over_mark: 0.30      # asymmetric reflexive trades
+  stop_pct_under_mark: 0.06       # tight stop — "exit fast when wrong"
+  entry_band_pct: 0.005
+  horizon_days: 90
+  confidence_floor: 0.5
+  macro_regime_modulation: true   # macro-momentum-implied target

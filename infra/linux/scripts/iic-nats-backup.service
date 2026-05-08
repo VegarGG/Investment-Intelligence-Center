@@ -1,0 +1,13 @@
+[Unit]
+Description=IIC v2.5 T1.7 — Daily NATS JetStream backup
+Documentation=workflows/33_T1_FINISH_AND_BURN_IN.md
+Requires=docker.service
+After=docker.service iic.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/iic
+ExecStart=/usr/local/bin/iic-nats-backup.sh
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=300

@@ -1,14 +1,16 @@
-# IIC v2.1 — root compose file.
+# IIC v2.5 — root compose file.
 #
 # GROUND TRUTH (workflow 01 §2.5–§2.6, PLAN §0):
 #   - Every persistent volume is a BIND MOUNT under /srv/iic/<service>.
 #     No Docker named volumes anywhere. This is what makes NAS migration
 #     a `mount` change with zero compose edits (workflow 01 §5.6).
 #   - All services share `.env` via the iic-base anchor.
-#
-# Phase-0 scope: substrate (NATS, Postgres+Timescale, ChromaDB, MinIO, Redis,
-# Grafana, Loki, Prometheus, cadvisor) + Phase-0 agent stubs that come up
-# green on /health. Real agent logic lands per its workflow doc.
+#   - v2.5 T1.8: every service has an explicit memory cap. Real total with
+#     6 agents × 1 G + orchestrator + substrate ≈ 19.8 G; Mac mini M4 Pro
+#     24 G leaves ~4 G headroom for OS + buffers (Linux page cache + journal).
+#     The plan §T1.8's "~16 G" was an arithmetic miss (didn't multiply the
+#     6 agents). Caps use both `mem_limit:` (compose-standalone) and
+#     `deploy.resources.limits.memory` (compose v2 / swarm) for portability.
 
 x-iic-base: &iic-base
   restart: unless-stopped
@@ -26,6 +28,8 @@ services:
     ports:
       - "4222:4222"
       - "8222:8222"
+    mem_limit: 512m
+    deploy: { resources: { limits: { memory: 512M } } }
 
   postgres:
     <<: *iic-base
@@ -44,6 +48,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    mem_limit: 4g
+    deploy: { resources: { limits: { memory: 4G } } }
 
   chroma:
     <<: *iic-base
@@ -53,6 +59,8 @@ services:
       - /srv/iic/chroma:/chroma/.chroma
     ports:
       - "8000:8000"
+    mem_limit: 4g
+    deploy: { resources: { limits: { memory: 4G } } }
 
   minio:
     <<: *iic-base
@@ -67,6 +75,8 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   redis:
     <<: *iic-base
@@ -77,6 +87,8 @@ services:
       - /srv/iic/redis:/data
     ports:
       - "6379:6379"
+    mem_limit: 512m
+    deploy: { resources: { limits: { memory: 512M } } }
 
   # ----------------------------------------------------------- observability
   grafana:
@@ -87,6 +99,8 @@ services:
       - /srv/iic/grafana:/var/lib/grafana
     ports:
       - "3000:3000"
+    mem_limit: 512m
+    deploy: { resources: { limits: { memory: 512M } } }
 
   loki:
     <<: *iic-base
@@ -96,6 +110,8 @@ services:
       - /srv/iic/loki:/loki
     ports:
       - "3100:3100"
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   prometheus:
     <<: *iic-base
@@ -106,6 +122,8 @@ services:
       - /srv/iic/prometheus:/prometheus
     ports:
       - "9090:9090"
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   cadvisor:
     <<: *iic-base
@@ -119,6 +137,8 @@ services:
       - /var/lib/docker:/var/lib/docker:ro
     ports:
       - "8088:8080"
+    mem_limit: 256m
+    deploy: { resources: { limits: { memory: 256M } } }
 
   # ----------------------------------------------------- orchestrator + agents
   orchestrator:
@@ -133,6 +153,8 @@ services:
       chroma: { condition: service_started }
     ports:
       - "8080:8080"
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   agent_intelligence:
     <<: *iic-base
@@ -140,6 +162,8 @@ services:
     container_name: iic-agent-intelligence
     depends_on: [nats, postgres]
     ports: ["8081:8081"]
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   agent_fundamental:
     <<: *iic-base
@@ -147,6 +171,8 @@ services:
     container_name: iic-agent-fundamental
     depends_on: [nats, postgres]
     ports: ["8082:8082"]
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   agent_quant:
     <<: *iic-base
@@ -154,6 +180,8 @@ services:
     container_name: iic-agent-quant
     depends_on: [nats, postgres]
     ports: ["8083:8083"]
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   agent_persona:
     <<: *iic-base
@@ -161,6 +189,8 @@ services:
     container_name: iic-agent-persona
     depends_on: [nats, postgres, chroma]
     ports: ["8084:8084"]
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   agent_backtest:
     <<: *iic-base
@@ -168,6 +198,8 @@ services:
     container_name: iic-agent-backtest
     depends_on: [nats, postgres]
     ports: ["8085:8085"]
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
 
   agent_secretary:
     <<: *iic-base
@@ -175,9 +207,26 @@ services:
     container_name: iic-agent-secretary
     depends_on: [nats, postgres]
     ports: ["8086:8086"]
+    mem_limit: 1g
+    deploy: { resources: { limits: { memory: 1G } } }
+
+  agent_futu:
+    <<: *iic-base
+    build: { context: ./apps/agent_futu }
+    container_name: iic-agent-futu
+    depends_on: [nats, postgres]
+    ports: ["8087:8087"]
+    mem_limit: 512m
+    deploy: { resources: { limits: { memory: 512M } } }
+    # B3.3a-only by default. Lighting up real OpenD requires the security
+    # review in docs/security/FUTU_readonly_review.md (B3.3b).
+    environment:
+      AGENT_FUTU_PHASE: "B3.3a-mock"
 
   dashboard:
     <<: *iic-base
     build: { context: ./apps/dashboard }
     container_name: iic-dashboard
     ports: ["4173:80"]
+    mem_limit: 256m
+    deploy: { resources: { limits: { memory: 256M } } }

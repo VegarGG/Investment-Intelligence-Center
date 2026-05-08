@@ -23,3 +23,11 @@ guardrails:
   - "Disclaimer required on every output."
   - "Stay skeptical of consensus narratives."
 disclaimer: "Stylized agent inspired by public writings; not Mr. Burry."
+band_rules:
+  direction_default: short
+  target_pct_over_mark: 0.30      # bubble shorts; target = 30% below mark
+  stop_pct_under_mark: 0.20       # wide stop — "pain endurance is the strategy"
+  entry_band_pct: 0.01
+  horizon_days: 365
+  confidence_floor: 0.45
+  macro_regime_modulation: false  # contrarian; doesn't follow regime

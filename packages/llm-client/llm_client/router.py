@@ -12,6 +12,8 @@ ContextVar so callers don't have to thread them into every function.
 
 from __future__ import annotations
 
+import asyncio
+import uuid
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -55,6 +57,36 @@ async def with_signals(**kwargs: Any) -> AsyncIterator[None]:
 
 def runtime_signals() -> Mapping[str, Any]:
     return _runtime_signals.get()
+
+
+# v2.5 T1.9 — synthetic-skip response when the cost breaker is open. The
+# `cost_skipped` flag travels through the response so downstream nodes can
+# tag their advice as "synthetic-skip-tainted." Tests pin this string so the
+# brief markdown can detect it.
+COST_SKIPPED_MARKER = "[cost-breaker open: synthetic skip]"
+
+
+def synthetic_skip_response(
+    *, caller_id: str, tier: LlmTier, reason: str = "cost_breaker_open"
+) -> "ChatResponse":
+    """Build a `cost_skipped=True` ChatResponse the DAG can consume.
+
+    Used by ``LlmRouter.chat_or_skip`` so cost-cap-tripped DAG nodes still
+    return a valid response shape rather than raising mid-fanout.
+    """
+    return ChatResponse(
+        text=COST_SKIPPED_MARKER,
+        model=f"synthetic-skip:{reason}",
+        tier=tier,
+        prompt_tokens=0,
+        completion_tokens=0,
+        cost_usd=0.0,
+        cached=False,
+        fallback_used=False,
+        cost_skipped=True,
+        request_id=f"skip-{uuid.uuid4().hex[:12]}",
+        latency_ms=0,
+    )
 
 
 @dataclass(slots=True)
@@ -137,6 +169,60 @@ class LlmRouter:
         if self.cache is not None and spec.cache_eligible and not force_tier:
             await self.cache.set(caller_id, tier, messages, response, spec.cache_ttl_seconds)
         return response
+
+    async def chat_or_skip(
+        self,
+        caller_id: str,
+        messages: list[ChatMessage],
+        *,
+        force_tier: LlmTier | None = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.4,
+        timeout_s: float = 30.0,
+        drain_deadline_s: float = 30.0,
+    ) -> ChatResponse:
+        """v2.5 T1.9 — graceful-degrade chat.
+
+        Behaviour at cost-breaker-open:
+        - In-flight calls keep running, capped at ``drain_deadline_s``.
+        - New calls return a `cost_skipped=True` ChatResponse so the DAG
+          continues with synthetic-skip-tainted advice.
+        - `with_signals(cost_breaker_open=True)` propagates the state to
+          downstream nodes that consume `runtime_signals()`.
+
+        Use this from DAG nodes that must never raise on cost-cap; use
+        ``chat()`` directly when a hard fail is the right behaviour.
+        """
+
+        if not await self.cost_meter.allow():
+            fire_and_forget(
+                self.telemetry,
+                caller_id=caller_id,
+                request=messages,
+                response=None,
+                outcome="rate_limit",
+                error="cost_breaker_open",
+            )
+            return synthetic_skip_response(caller_id=caller_id, tier=force_tier or "flash")
+
+        try:
+            return await asyncio.wait_for(
+                self.chat(
+                    caller_id,
+                    messages,
+                    force_tier=force_tier,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    timeout_s=timeout_s,
+                ),
+                timeout=drain_deadline_s,
+            )
+        except CostBudgetExceeded:
+            return synthetic_skip_response(caller_id=caller_id, tier=force_tier or "flash")
+        except TimeoutError:
+            return synthetic_skip_response(
+                caller_id=caller_id, tier=force_tier or "flash", reason="drain_deadline"
+            )
 
     async def embed(self, caller_id: str, texts: list[str]) -> EmbedResponse:
         # Sanity: the matrix entry must declare embed tier.

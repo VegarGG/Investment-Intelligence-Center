@@ -50,6 +50,9 @@ Documents are numbered for dependency order. Lower numbers should land before hi
 | 30 | `30_OBSERVABILITY_AND_EVAL.md` | Grafana + Loki + Prometheus + eval harness + leaderboard math |
 | 31 | `31_PRODUCTION_HARDENING.md` | DR drill, NAS migration validation, security review, secrets rotation |
 | 32 | `32_V2_5_T0_T1_CHANGELOG.md` | v2.5 T0 + T1 partial — featureflags, persona source-of-truth, ADR-0004, quotes, missing personas, intel startup, DAG coverage, agent breaker |
+| 33 | `33_T1_FINISH_AND_BURN_IN.md` | v2.5 T1 finish — notifier durable redelivery, NATS backup, mem caps, cost-breaker behaviour, PIT ingest, decision log, walk-forward CI, persona band derivation, synthetic burn-in regime |
+| 40 | `40_TRADING_ROOM_OVERVIEW.md` | v2.5 T2 placeholder — NATS request-reply substrate (T2.0) + plan.v1 schema (T2.2) shipped; Investment Board / Event-Triage / live benchmarking next iteration |
+| 41 | `41_FUTU_READONLY_INTEGRATION.md` | v2.5 T2.7 — mock OpenD + read-only wrapper + hash-chained audit shipped (B3.3a); real OpenD + paper-account penetration test gated on Ziwei sign-off (B3.3b) |
 
 ---
 

@@ -10,22 +10,28 @@ from llm_client.exceptions import (
     UnknownCallerId,
 )
 from llm_client.router import (
+    COST_SKIPPED_MARKER,
     LlmRouter,
     chat,
     embed,
     get_router,
+    runtime_signals,
     set_router,
+    synthetic_skip_response,
     with_signals,
 )
 from llm_client.types import ChatMessage, ChatResponse, EmbedResponse, LlmTier
 
 __version__ = "0.1.0"
 __all__ = [
+    "COST_SKIPPED_MARKER",
     "LlmRouter",
     "chat",
     "embed",
     "get_router",
+    "runtime_signals",
     "set_router",
+    "synthetic_skip_response",
     "with_signals",
     "ChatMessage",
     "ChatResponse",

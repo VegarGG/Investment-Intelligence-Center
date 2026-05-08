@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 
-from .types import CanonicalTrade, MemoryScope, PersonaSpec
+from .types import BandRules, CanonicalTrade, MemoryScope, PersonaSpec
 
 
 def load(path: str | Path) -> PersonaSpec:
@@ -62,4 +62,24 @@ def _to_spec(row: dict[str, Any]) -> PersonaSpec:
         ),
         guardrails=tuple(str(g) for g in row.get("guardrails", [])),
         disclaimer=str(row["disclaimer"]),
+        band_rules=_band_rules(row.get("band_rules")),
+    )
+
+
+def _band_rules(raw: Any) -> BandRules | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"band_rules must be a mapping, got {type(raw).__name__}")
+    direction = str(raw.get("direction_default", "flat")).strip().lower()
+    if direction not in {"long", "short", "flat"}:
+        raise ValueError(f"band_rules.direction_default must be long|short|flat, got {direction!r}")
+    return BandRules(
+        direction_default=direction,
+        target_pct_over_mark=float(raw.get("target_pct_over_mark", 0.0)),
+        stop_pct_under_mark=float(raw.get("stop_pct_under_mark", 0.0)),
+        entry_band_pct=float(raw.get("entry_band_pct", 0.005)),
+        horizon_days=int(raw.get("horizon_days", 180)),
+        confidence_floor=float(raw.get("confidence_floor", 0.5)),
+        macro_regime_modulation=bool(raw.get("macro_regime_modulation", False)),
     )

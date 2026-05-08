@@ -24,6 +24,7 @@ class ChatResponse(BaseModel):
     cost_usd: float = Field(ge=0.0)
     cached: bool = False
     fallback_used: bool = False
+    cost_skipped: bool = False  # v2.5 T1.9 — emitted when cost breaker open
     request_id: str
     latency_ms: int = Field(ge=0)
 

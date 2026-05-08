@@ -160,16 +160,30 @@ def build_dag(
         hard_timeout_s=sec_hard,
     )
 
-    # ---- notify -----------------------------------------------------------
-    async def n_notify(state: MorningBriefState) -> dict[str, Any]:
-        result = await client.call(
-            "agent_secretary",
-            {"action": "notify", "markdown": state.brief_md, "trace_id": state.trace_id},
-        )
-        state.notify_result = result
-        return {"node": "n_notify", "ok": result.get("ok", True)}
+    # ---- deliver (v2.5 T1.4: never-fail; redelivery handled by secretary) ----
+    async def n_deliver_brief(state: MorningBriefState) -> dict[str, Any]:
+        """Plan §T1.4b — failures here MUST NOT fail the DAG.
 
-    g.add_node("n_notify", n_notify)
+        The secretary agent owns redelivery (it wraps the router with
+        `notify_with_redelivery`); this node just records what happened
+        so observability surfaces deferred messages.
+        """
+        try:
+            result = await client.call(
+                "agent_secretary",
+                {"action": "notify", "markdown": state.brief_md, "trace_id": state.trace_id},
+            )
+        except Exception as exc:
+            state.notify_result = {"ok": False, "deferred": True, "error": str(exc)}
+            return {"node": "n_deliver_brief", "ok": True, "deferred": True}
+        state.notify_result = result
+        return {
+            "node": "n_deliver_brief",
+            "ok": True,
+            "deferred": bool(result.get("deferred", False)),
+        }
+
+    g.add_node("n_deliver_brief", n_deliver_brief)
 
     # ---- edges ------------------------------------------------------------
     g.set_entry("n_intel_synth")
@@ -181,6 +195,6 @@ def build_dag(
     g.add_edge("n_quant", "n_secretary_brief")
     for slug in persona_slugs:
         g.add_edge(f"n_persona_{slug}", "n_secretary_brief")
-    g.add_edge("n_secretary_brief", "n_notify")
+    g.add_edge("n_secretary_brief", "n_deliver_brief")
 
     return g

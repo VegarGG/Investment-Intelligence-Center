@@ -20,6 +20,7 @@ from .intel import (
     MacroRegime,
 )
 from .ops import OpsAlertV1, OpsHeartbeatV1
+from .plan import Action, PlanV1, PortfolioContextV1, Team
 from .secretary import SecretaryNotifyV1
 
 __version__ = "0.1.0"
@@ -50,4 +51,9 @@ __all__ = [
     "SecretaryNotifyV1",
     "OpsAlertV1",
     "OpsHeartbeatV1",
+    # plan (v2.5 T2.2)
+    "Action",
+    "PlanV1",
+    "PortfolioContextV1",
+    "Team",
 ]

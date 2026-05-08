@@ -28,3 +28,11 @@ guardrails:
   - "Disclaimer required on every output — extra-loud risk warning required."
   - "Never recommend size > 5% of NAV in a single name without explicit volatility caveat."
 disclaimer: "Stylized retail-trader persona for adversarial-stress purposes; not investment advice; never trade without your own risk model."
+band_rules:
+  direction_default: long
+  target_pct_over_mark: 0.50      # YOLO momentum
+  stop_pct_under_mark: 0.20       # high-volatility tolerance
+  entry_band_pct: 0.02            # ±2% entry — buying into momentum
+  horizon_days: 30                # short-fuse trades
+  confidence_floor: 0.4
+  macro_regime_modulation: true   # rides the regime

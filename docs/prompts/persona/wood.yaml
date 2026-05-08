@@ -28,3 +28,11 @@ guardrails:
   - "Disclaimer required on every output."
   - "Disclose drawdown risk; innovation baskets can lose 60% peak-to-trough."
 disclaimer: "Stylized agent inspired by public writings; not Ms. Wood."
+band_rules:
+  direction_default: long
+  target_pct_over_mark: 0.50      # disruptive innovation S-curves
+  stop_pct_under_mark: 0.30       # wide — "volatility is cost of admission"
+  entry_band_pct: 0.015
+  horizon_days: 1825              # 5-year horizon
+  confidence_floor: 0.6
+  macro_regime_modulation: false

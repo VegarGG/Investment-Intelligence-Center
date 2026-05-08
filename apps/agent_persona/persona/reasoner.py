@@ -19,7 +19,7 @@ from schema import AdviceV1, Asset, Direction, Evidence, IntelDigestV1, IntelEve
 
 from .memory import MemoryStore
 from .output_validator import validate
-from .types import PersonaSpec
+from .types import BandRules, PersonaSpec
 
 Cadence = Literal["daily", "weekly"]
 
@@ -77,6 +77,7 @@ async def reason(
         anchor_event=anchor,
         asset=asset,
         mark=mark,
+        macro_regime=str(getattr(digest, "macro_regime", "unknown")),
         when=when,
     )
     validate(advice, spec=spec)
@@ -153,20 +154,80 @@ async def _resolve_mark(asset: Asset, when: datetime) -> Mark | None:
     return await get_mark(asset, when)
 
 
-def _bands_from_priors(
-    spec: PersonaSpec, mark_price: float
-) -> tuple[Direction, tuple[float, float], tuple[float, float], float]:
-    """Derive (direction, entry_band, target_band, stop_loss) from the persona's
-    priors + the live mark. v2.5 T1.1d.
+# Macro-regime → multiplier on `target_pct_over_mark`. Personas with
+# `macro_regime_modulation=True` (Soros, Druckenmiller, Rogers, Dalio,
+# retail_degen) ride the regime; quality / contrarian personas don't.
+_REGIME_MULTIPLIER: dict[str, float] = {
+    "rate_cut": 1.5,
+    "risk_on": 1.3,
+    "bull": 1.5,
+    "stagflation": 0.7,
+    "risk_off": 0.6,
+    "recession": 0.5,
+    "bear": 0.5,
+    "crisis": 0.4,
+    "neutral": 1.0,
+    "unknown": 1.0,
+}
 
-    Default direction is `flat` (advisory hold) — reasoner prompts emit thesis
-    text, not a directional flip, so flat keeps the advice schema valid while
-    still anchoring price points to the live mark.
+
+def _bands_from_priors(
+    spec: PersonaSpec,
+    mark_price: float,
+    *,
+    macro_regime: str = "unknown",
+) -> tuple[Direction, tuple[float, float], tuple[float, float], float, int, float]:
+    """Derive bands + horizon + confidence floor from a persona's spec + live mark.
+
+    Returns
+    -------
+    (direction, entry_band, target_band, stop_loss, horizon_days, confidence_floor)
+
+    When ``spec.band_rules`` is None, falls back to the legacy
+    ``direction=flat`` / ``(px, px)`` shape so chaos drills with stripped-down
+    YAMLs still emit schema-valid advice.
     """
 
     px = max(mark_price, 1e-6)
-    direction: Direction = "flat"
-    return direction, (px, px), (px, px), px
+    rules: BandRules | None = spec.band_rules
+    if rules is None:
+        return "flat", (px, px), (px, px), px, 180, 0.5
+
+    direction = _coerce_direction(rules.direction_default)
+    target_pct = rules.target_pct_over_mark
+    if rules.macro_regime_modulation:
+        target_pct *= _REGIME_MULTIPLIER.get(macro_regime.lower(), 1.0)
+    stop_pct = rules.stop_pct_under_mark
+    band_pct = max(rules.entry_band_pct, 0.0)
+
+    entry_lo = px * (1.0 - band_pct)
+    entry_hi = px * (1.0 + band_pct)
+
+    if direction == "long":
+        # Target above; stop below; bands ascend toward target.
+        target_lo = max(px * (1.0 + target_pct), entry_hi + 1e-6)
+        target_hi = target_lo * (1.0 + band_pct)
+        stop = min(px * (1.0 - stop_pct), entry_lo - 1e-6)
+        return direction, (entry_lo, entry_hi), (target_lo, target_hi), stop, rules.horizon_days, rules.confidence_floor
+
+    if direction == "short":
+        # Target below; stop above. AdviceV1 enforces target_band[1] < entry_band[0].
+        target_hi = min(px * (1.0 - target_pct), entry_lo - 1e-6)
+        target_lo = target_hi * (1.0 - band_pct)
+        stop = max(px * (1.0 + stop_pct), entry_hi + 1e-6)
+        return direction, (entry_lo, entry_hi), (target_lo, target_hi), stop, rules.horizon_days, rules.confidence_floor
+
+    # Flat — collapse everything to px so AdviceV1's flat-direction validator passes.
+    return "flat", (px, px), (px, px), px, rules.horizon_days, rules.confidence_floor
+
+
+def _coerce_direction(s: str) -> Direction:
+    raw = s.strip().lower()
+    if raw == "long":
+        return "long"
+    if raw == "short":
+        return "short"
+    return "flat"
 
 
 def _to_advice(
@@ -176,10 +237,13 @@ def _to_advice(
     anchor_event: Any,
     asset: Asset,
     mark: Mark | None,
+    macro_regime: str,
     when: datetime,
 ) -> AdviceV1:
     px = mark.price if (mark and mark.price > 0) else _PLACEHOLDER_PX
-    direction, entry_band, target_band, stop_loss = _bands_from_priors(spec, px)
+    direction, entry_band, target_band, stop_loss, horizon_days, conf_floor = _bands_from_priors(
+        spec, px, macro_regime=macro_regime
+    )
     return AdviceV1(
         id=str(ulid.ULID()),
         agent=f"persona.{spec.slug}",
@@ -187,14 +251,14 @@ def _to_advice(
         asset=asset,
         thesis=thesis,
         direction=direction,
-        confidence=0.5,
+        confidence=conf_floor,
         entry_band=entry_band,
         target_band=target_band,
         stop_loss=stop_loss,
-        horizon_days=180,
+        horizon_days=horizon_days,
         max_drawdown_pct=15.0,
         sizing_hint_pct_nav=2.0,
-        expires_at=when + timedelta(days=180),
+        expires_at=when + timedelta(days=horizon_days),
         evidence=[Evidence(kind="news", ref=f"intel.digest.v1#{anchor_event.id}")],
         disclaimer=spec.disclaimer,
     )

@@ -19,9 +19,10 @@ The v2.5 plan supersedes v2.1's phase mapping with a tier-staged contract: T0 pr
 | Tier | Items | Status |
 |------|-------|--------|
 | **T0 — Rollback substrate** | T0.1 featureflags • T0.2 persona source-of-truth • T0.3 SPOF ADR | ✅ Shipped |
-| **T1 — Correctness, reliability, DAG coverage** | T1.1 live mark + persona events • T1.2 missing personas • T1.3 intel pipeline at startup • T1.5 DAG coverage closure • T1.6 per-agent breaker | ✅ Shipped (5 of 12) |
-| T1 (remaining) | T1.4 notifier durable • T1.7 NATS backup • T1.8 mem caps • T1.9 cost breaker • T1.10 PIT • T1.11 markdown decision log • T1.12 walk-forward CI | ⏳ Pending |
-| **T2 — Investment Board + FUTU + event-flow** | T2.0–T2.10 | ⏳ Gated on T1 |
+| **T1 — Correctness, reliability, DAG coverage** | T1.1 live mark • T1.1d persona band derivation • T1.2 missing personas • T1.3 intel pipeline at startup • T1.4 notifier durable redelivery • T1.5 DAG coverage closure • T1.6 per-agent breaker • T1.7 NATS backup + restore drill • T1.8 memory caps • T1.9 cost-breaker behaviour • T1.10 PIT ingest • T1.11 markdown decision log + Backtest reflection • T1.12 walk-forward CI gate | ✅ Shipped |
+| **Synthetic burn-in regime** | 4-phase replacement for the 14-day production-burn gate (chaos + walk-forward + observability + real-API cost-cap) | ✅ Shipped (phases 1–2 default; phases 3–4 real-integration-gated) |
+| **T2 — Investment Board + FUTU + event-flow** | T2.0 NATS request-reply substrate • T2.2 plan.v1 schema • T2.7 FUTU mock-OpenD (B3.3a) | ✅ B3.1 + B3.2 + B3.3a shipped |
+| T2 (remaining) | T2.1 Event-Triage Gate • T2.3 team_plan endpoints • T2.4 Investment Board • T2.5 live benchmarking • T2.6 trading-room brief • T2.7 real OpenD / B3.3b • T2.8 trading-room DAG • T2.9–T2.10 prompt upgrades | ⏳ Next iteration |
 | **T3 — Research depth** | Options-flow team, on-chain, geopolitics, BL portfolio, mobile app, … | ⏳ Gated on T2 + 30 d soak |
 
 For the v2.1 phase mapping (still relevant — it documents the substrate v2.5 builds on), see workflow 00.

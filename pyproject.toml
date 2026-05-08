@@ -76,6 +76,7 @@ mypy_path = [
   "apps/agent_persona",
   "apps/agent_backtest",
   "apps/agent_secretary",
+  "apps/agent_futu",
 ]
 exclude = ["apps/dashboard", ".*/tests/.*"]
 
@@ -95,7 +96,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["packages", "apps"]
+testpaths = ["packages", "apps", "tests"]
 python_files = ["test_*.py", "*_test.py"]
 addopts = "-ra --strict-markers"
 pythonpath = [
@@ -113,7 +114,9 @@ pythonpath = [
   "apps/agent_persona",
   "apps/agent_backtest",
   "apps/agent_secretary",
+  "apps/agent_futu",
 ]
 markers = [
   "integration: requires live infra (PG/NATS/Chroma/Redis); set IIC_INTEGRATION=1",
+  "real_api: spends real LLM/broker money; gated by per-test env (e.g. IIC_RUN_COST_CHAOS=1)",
 ]

@@ -79,18 +79,21 @@ def build_midday_pulse_dag(client: AgentClient) -> StateGraph[_SimpleState]:
     async def n_notify_if_changed(state: _SimpleState) -> dict[str, Any]:
         if not (state.notify_payload and state.notify_payload.get("regime_changed")):
             return {"node": "n_notify_if_changed", "skipped": True}
-        await client.call(
-            "agent_secretary",
-            {
-                "action": "notify",
-                "severity": "INFO",
-                "trace_id": state.trace_id,
-                "markdown": (
-                    f"Midday regime check: macro_regime={state.macro_regime}. "
-                    "Regime changed since the morning brief — review positions."
-                ),
-            },
-        )
+        try:
+            await client.call(
+                "agent_secretary",
+                {
+                    "action": "notify",
+                    "severity": "INFO",
+                    "trace_id": state.trace_id,
+                    "markdown": (
+                        f"Midday regime check: macro_regime={state.macro_regime}. "
+                        "Regime changed since the morning brief — review positions."
+                    ),
+                },
+            )
+        except Exception as exc:
+            return {"node": "n_notify_if_changed", "skipped": False, "deferred": True, "error": str(exc)}
         return {"node": "n_notify_if_changed", "skipped": False}
 
     g.add_node("n_notify_if_changed", n_notify_if_changed)
@@ -139,15 +142,18 @@ def build_evening_recap_dag(client: AgentClient) -> StateGraph[_SimpleState]:
         markdown = (state.notify_payload or {}).get("markdown")
         if not markdown:
             return {"node": "n_recap_notify", "skipped": True}
-        await client.call(
-            "agent_secretary",
-            {
-                "action": "notify",
-                "severity": "INFO",
-                "markdown": markdown,
-                "trace_id": state.trace_id,
-            },
-        )
+        try:
+            await client.call(
+                "agent_secretary",
+                {
+                    "action": "notify",
+                    "severity": "INFO",
+                    "markdown": markdown,
+                    "trace_id": state.trace_id,
+                },
+            )
+        except Exception as exc:
+            return {"node": "n_recap_notify", "skipped": False, "deferred": True, "error": str(exc)}
         return {"node": "n_recap_notify", "skipped": False}
 
     g.add_node("n_recap_notify", n_recap_notify)

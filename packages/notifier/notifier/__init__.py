@@ -13,6 +13,17 @@ from .adapters import (
 )
 from .markdown_normalizer import clean
 from .ratelimit import RateLimiter
+from .redelivery import (
+    TTL_BY_SEVERITY,
+    InMemoryRedeliveryQueue,
+    QueuedMessage,
+    RedeliveryDrainer,
+    RedeliveryQueue,
+    RedisRedeliveryQueue,
+    deferred_event_payload,
+    delivered_event_payload,
+    notify_with_redelivery,
+)
 from .router import NotifyExhausted, Router, build_router, severity_to_channels
 from .types import (
     AdapterAttempt,
@@ -30,18 +41,27 @@ __all__ = [
     "AdapterRateLimit",
     "AdapterRejected",
     "ChannelHint",
+    "InMemoryRedeliveryQueue",
     "NotifyExhausted",
     "NotifyResult",
     "Notification",
     "NtfyAdapter",
+    "QueuedMessage",
     "RateLimiter",
+    "RedeliveryDrainer",
+    "RedeliveryQueue",
+    "RedisRedeliveryQueue",
     "Router",
     "ServerChanAdapter",
     "Severity",
     "SmtpAdapter",
+    "TTL_BY_SEVERITY",
     "WeComAppAdapter",
     "WeComBotAdapter",
     "build_router",
     "clean",
+    "deferred_event_payload",
+    "delivered_event_payload",
+    "notify_with_redelivery",
     "severity_to_channels",
 ]

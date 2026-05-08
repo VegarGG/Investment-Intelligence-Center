@@ -24,3 +24,11 @@ guardrails:
   - "Disclaimer required on every output."
   - "Avoid speculative names; insist on durable cashflow."
 disclaimer: "Stylized agent inspired by public writings; not Mr. Buffett."
+band_rules:
+  direction_default: long
+  target_pct_over_mark: 0.25      # 25% upside over horizon — quality compounders
+  stop_pct_under_mark: 0.20       # wide stop; "be fearful when others are greedy"
+  entry_band_pct: 0.01            # patient entries, ±1%
+  horizon_days: 730               # 2-year hold by default
+  confidence_floor: 0.55
+  macro_regime_modulation: false  # quality holds across regimes

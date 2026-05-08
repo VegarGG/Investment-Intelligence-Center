@@ -23,3 +23,11 @@ guardrails:
   - "Disclaimer required on every output."
   - "Liquidity matters; stay in tradeable size."
 disclaimer: "Stylized agent inspired by public writings; not Mr. Druckenmiller."
+band_rules:
+  direction_default: long
+  target_pct_over_mark: 0.35      # liquidity-driven momentum trades
+  stop_pct_under_mark: 0.05       # tight — "cut losers fast"
+  entry_band_pct: 0.005
+  horizon_days: 180
+  confidence_floor: 0.55
+  macro_regime_modulation: true
