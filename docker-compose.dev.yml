@@ -1,0 +1,105 @@
+# IIC v2.5 — DEV overlay.
+#
+# Used in conjunction with docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Differences from prod:
+#   - Mounts /srv/iic/featureflags into every agent so flags.yaml is editable
+#     on the host without rebuilding images.
+#   - Lowers some memory caps to fit on a developer laptop with 16 G RAM.
+#   - Disables the FUTU agent (it stays present but never starts) — FUTU
+#     Phase A is mock-only, Phase B is gated on Ziwei sign-off, neither is
+#     useful for first-run prototype testing.
+#   - Reduces grafana/loki/prometheus to "off by default" via profiles —
+#     the observability stack is heavy and not needed for first-run.
+#
+# How to enable observability in dev:
+#   docker compose --profile observability \
+#     -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  # ---- substrate: shrink memory caps to fit on 16 G dev laptops ------------
+  postgres:
+    mem_limit: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  chroma:
+    mem_limit: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ---- mount feature flags + featureflags.path env into every agent --------
+  orchestrator:
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+
+  agent_intelligence:
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+      INTEL_AUTOSTART: "0"
+
+  agent_fundamental:
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+
+  agent_quant:
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+
+  agent_persona:
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+
+  agent_backtest:
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+
+  agent_secretary:
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+
+  agent_board:
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+
+  # ---- agent_futu: keep present but never start in dev ---------------------
+  # Phase A (mock OpenD) ships in this iteration but the Phase B real-OpenD
+  # rules require sops + age key + the security-review sign-off. For
+  # prototype testing we keep the container off entirely.
+  agent_futu:
+    profiles: ["futu"]   # not in the default profile → docker compose up skips it
+    volumes:
+      - /srv/iic/featureflags:/srv/iic/featureflags:ro
+    environment:
+      IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+
+  # ---- observability: opt-in via profile -----------------------------------
+  grafana:
+    profiles: ["observability"]
+  loki:
+    profiles: ["observability"]
+  prometheus:
+    profiles: ["observability"]
+  cadvisor:
+    profiles: ["observability"]

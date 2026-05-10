@@ -223,6 +223,17 @@ services:
     environment:
       AGENT_FUTU_PHASE: "B3.3a-mock"
 
+  agent_board:
+    <<: *iic-base
+    build: { context: ./apps/agent_board }
+    container_name: iic-agent-board
+    depends_on: [nats, postgres]
+    ports: ["8088:8088"]
+    mem_limit: 512m
+    deploy: { resources: { limits: { memory: 512M } } }
+    # v2.5 N3.3 / T2.4 — Investment Board. Behaviour is gated on the
+    # `trading_room.investment_board.enabled` feature flag (default OFF).
+
   dashboard:
     <<: *iic-base
     build: { context: ./apps/dashboard }

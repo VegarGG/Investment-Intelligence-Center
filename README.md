@@ -4,6 +4,17 @@
 >
 > **v2.1 substrate is in production. v2.5 — Investment Board, FUTU read-only multi-account, event-flow workflow, tier-staged delivery — is in progress (T0 + T1 partial shipped).**
 
+## Quick start (fresh Ubuntu 26.04 LTS)
+
+```bash
+git clone https://github.com/VegarGG/Investment-Intelligence-Center
+cd Investment-Intelligence-Center
+make setup
+# open http://localhost:4173 when it finishes
+```
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the full walkthrough, troubleshooting, and how to add API keys later.
+
 ## Specs
 
 - [`plan/EXECUTIVE_SUMMARY_bilingual.md`](plan/EXECUTIVE_SUMMARY_bilingual.md) — bilingual elevator pitch.
