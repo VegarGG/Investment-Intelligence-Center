@@ -157,48 +157,64 @@ do_apt_base() {
 
 # --- step: Docker Engine + Compose plugin ------------------------------------
 do_docker() {
+  # PHASE 1 — install (skipped if docker + compose are already present).
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     say "Docker + compose plugin already installed; skipping install."
-    return 0
-  fi
-
-  # Try the official Docker apt repo first (latest stable). If the
-  # codename has no Docker release yet (Ubuntu 26.04 may be too new),
-  # fall back to the universe `docker.io` package which is older but
-  # always available.
-  local codename=""
-  if [[ -f /etc/os-release ]]; then
-    . /etc/os-release
-    codename="${VERSION_CODENAME:-}"
-  fi
-  local repo_url="https://download.docker.com/linux/ubuntu"
-
-  if curl -fsS -o /dev/null "${repo_url}/dists/${codename}/Release"; then
-    say "Installing Docker CE from official repo (${codename})."
-    run sudo install -m 0755 -d /etc/apt/keyrings
-    run sudo bash -c "curl -fsSL ${repo_url}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
-    run sudo chmod a+r /etc/apt/keyrings/docker.gpg
-    local arch; arch="$(dpkg --print-architecture)"
-    run sudo bash -c "echo 'deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.gpg] ${repo_url} ${codename} stable' > /etc/apt/sources.list.d/docker.list"
-    run sudo apt-get update -qq
-    run sudo apt-get install -y \
-      docker-ce docker-ce-cli containerd.io \
-      docker-buildx-plugin docker-compose-plugin
   else
-    warn "Docker has no apt release for ${codename} yet; falling back to docker.io from universe."
-    run sudo apt-get install -y docker.io docker-compose-v2
+    # Try the official Docker apt repo first (latest stable). If the
+    # codename has no Docker release yet (Ubuntu 26.04 may be too new),
+    # fall back to the universe `docker.io` package which is older but
+    # always available.
+    local codename=""
+    if [[ -f /etc/os-release ]]; then
+      . /etc/os-release
+      codename="${VERSION_CODENAME:-}"
+    fi
+    local repo_url="https://download.docker.com/linux/ubuntu"
+
+    if curl -fsS -o /dev/null "${repo_url}/dists/${codename}/Release"; then
+      say "Installing Docker CE from official repo (${codename})."
+      run sudo install -m 0755 -d /etc/apt/keyrings
+      run sudo bash -c "curl -fsSL ${repo_url}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+      run sudo chmod a+r /etc/apt/keyrings/docker.gpg
+      local arch; arch="$(dpkg --print-architecture)"
+      run sudo bash -c "echo 'deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.gpg] ${repo_url} ${codename} stable' > /etc/apt/sources.list.d/docker.list"
+      run sudo apt-get update -qq
+      run sudo apt-get install -y \
+        docker-ce docker-ce-cli containerd.io \
+        docker-buildx-plugin docker-compose-plugin
+    else
+      warn "Docker has no apt release for ${codename} yet; falling back to docker.io from universe."
+      run sudo apt-get install -y docker.io docker-compose-v2
+    fi
   fi
 
-  # Add invoking user to the docker group so they don't need sudo per-command.
-  if [[ -n "${SUDO_USER:-}" ]]; then
-    run sudo usermod -aG docker "${SUDO_USER}"
-  else
-    run sudo usermod -aG docker "$(id -un)"
+  # PHASE 2 — group + service. Always runs, even when Docker was
+  # pre-installed before setup.sh did. This is the load-bearing fix
+  # for the "permission denied connecting to /var/run/docker.sock"
+  # case on machines where Docker came with the OS image.
+  local user; user="${SUDO_USER:-$(id -un)}"
+
+  # Make sure the docker group exists (it normally does on Ubuntu, but
+  # not always on minimal images).
+  if ! getent group docker >/dev/null 2>&1; then
+    run sudo groupadd docker
   fi
+
+  # Add the user only if not already a member, to keep the run output quiet.
+  if ! getent group docker | tr ',' '\n' | grep -qx "${user}"; then
+    say "Adding '${user}' to the docker group."
+    run sudo usermod -aG docker "${user}"
+  else
+    say "User '${user}' is already in the docker group."
+  fi
+
+  # Ensure the daemon is enabled + running.
   run sudo systemctl enable --now docker
 
-  say "Docker installed. NOTE: you may need to log out + back in for the"
-  say "      'docker' group membership to take effect on your shell."
+  say "Docker ready. NOTE: if this is your first add to the docker group,"
+  say "      the new membership isn't active in this shell yet — the"
+  say "      script will auto-re-exec under 'sg docker' below."
 }
 
 # --- ensure: docker socket is reachable as the current user ------------------
@@ -227,29 +243,35 @@ ensure_docker_access() {
     fail "/var/run/docker.sock is missing — is the docker daemon running? Try 'sudo systemctl start docker'."
   fi
 
-  # Daemon is up but our session can't reach it. If we're already in the
-  # docker group on disk, re-exec under sg docker so the supplementary
-  # group becomes active.
+  # Daemon is up but our session can't reach it.
   local user; user="${SUDO_USER:-$(id -un)}"
-  if getent group docker 2>/dev/null | tr ',' '\n' | grep -qx "${user}"; then
-    if [[ -z "${IIC_SETUP_REEXEC_DONE:-}" ]]; then
-      say "User '${user}' is in the docker group, but the new membership"
-      say "isn't active in this shell yet. Re-executing under 'sg docker'..."
-      export IIC_SETUP_REEXEC_DONE=1
-      # `sg <group> -c "<cmd>"` runs <cmd> with <group> as primary group
-      # of the spawned process. Bash quotes the argv via printf %q so
-      # paths with spaces (the common case here — repo dir has spaces)
-      # survive the re-exec.
-      local quoted=""
-      for a in "$@"; do
-        quoted+="$(printf '%q ' "${a}")"
-      done
-      exec sg docker -c "bash $(printf '%q' "${BASH_SOURCE[0]}") ${quoted}"
-    fi
-    fail "Re-exec under 'sg docker' still can't reach the daemon. Log out, log back in, then re-run 'make setup'."
+
+  # If the user isn't in the docker group at all (e.g., do_docker
+  # short-circuited on a system where docker was pre-installed and an
+  # older version of this script never added the user), self-heal: add
+  # them now and proceed to the re-exec path.
+  if ! getent group docker 2>/dev/null | tr ',' '\n' | grep -qx "${user}"; then
+    say "User '${user}' is not in the docker group; adding now."
+    run sudo usermod -aG docker "${user}"
   fi
 
-  fail "Cannot connect to /var/run/docker.sock as user '${user}'. Add yourself to the docker group: 'sudo usermod -aG docker ${user}', then log out and back in."
+  # Now they're in the group on disk; re-exec under sg docker so the
+  # supplementary group becomes active for the rest of the run.
+  if [[ -z "${IIC_SETUP_REEXEC_DONE:-}" ]]; then
+    say "Docker group membership not active in this shell yet."
+    say "Re-executing under 'sg docker' to pick up the new group..."
+    export IIC_SETUP_REEXEC_DONE=1
+    # `sg <group> -c "<cmd>"` runs <cmd> with <group> as the primary
+    # group of the spawned process. Quote argv via printf %q so paths
+    # with spaces (the common case — repo dir has spaces) survive.
+    local quoted=""
+    for a in "$@"; do
+      quoted+="$(printf '%q ' "${a}")"
+    done
+    exec sg docker -c "bash $(printf '%q' "${BASH_SOURCE[0]}") ${quoted}"
+  fi
+
+  fail "Re-exec under 'sg docker' still can't reach /var/run/docker.sock. Log out, log back in, then re-run 'make setup'."
 }
 
 # --- step: data dir tree under /srv/iic --------------------------------------
