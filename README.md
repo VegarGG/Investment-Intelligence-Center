@@ -15,6 +15,34 @@ make setup
 
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the full walkthrough, troubleshooting, and how to add API keys later.
 
+## Notes from a fresh-Linux bring-up (2026-05-10)
+
+A first-time `make setup` on a clean Ubuntu Desktop 26.04 box surfaced several
+issues that don't show up on the development machine. They're patched on the
+`fix/deploy-fresh-linux-bringup` branch but are worth knowing about for future
+iterations — most of them are class-of-bug rather than one-shot typos.
+
+| Layer | Bug | Where it lived |
+|---|---|---|
+| **psql substitution** | `:'app_pw'` doesn't expand inside `DO $$ ... $$` blocks. The `:` was sent verbatim and Postgres errored at parse time. Use `set_config()` + `current_setting()` to bridge psql variables into PL/pgSQL. | [infra/postgres/init-roles.sql](infra/postgres/init-roles.sql) |
+| **Postgres 15+ default ACL** | `iic_migration` had `CREATE ON DATABASE` but not on schema `public`. Alembic's `alembic_version` table lands in `public`, so the role needs explicit `GRANT USAGE, CREATE ON SCHEMA public`. | [infra/postgres/init-roles.sql](infra/postgres/init-roles.sql) |
+| **shell hygiene** | `basename "$dir" \| tr -c '[:alnum:]_-' '_'` converts the trailing newline to `_`, producing a doubled separator (`investment-intelligence-center__default`). Wrap with `printf '%s'` before `tr -c`. | [deploy/run-migrations.sh:43](deploy/run-migrations.sh#L43) |
+| **image lineage** | `timescale/timescaledb-ha:pg16` ships timescaledb / pgvector / vectorscale / hypopg / pgaudit but **not** `pg_partman`, which migration 0001 needs. Added a thin `infra/postgres/Dockerfile` that installs `postgresql-16-partman` from PGDG and updated compose to build it. | [infra/postgres/Dockerfile](infra/postgres/Dockerfile) + [docker-compose.yml](docker-compose.yml) |
+| **migration ordering** | `CREATE EXTENSION pg_partman SCHEMA partman` ran before `CREATE SCHEMA partman`. Postgres does not auto-create the target schema for `EXTENSION ... SCHEMA`. | [packages/data-lake/data_lake/migrations/versions/0001_init_lake.py](packages/data-lake/data_lake/migrations/versions/0001_init_lake.py) |
+| **pg_partman 5.x API change** | `partman.create_parent(p_type := 'native', ...)` was removed in pg_partman 5 — declarative partitioning is the only mode now and the value renamed to `'range'`. | [packages/data-lake/data_lake/migrations/versions/0001_init_lake.py](packages/data-lake/data_lake/migrations/versions/0001_init_lake.py) |
+| **TimescaleDB hypertable PK** | `id UUID PRIMARY KEY` on a table hypertabled on `ts` fails: TimescaleDB requires the partitioning column in any UNIQUE/PK. Hit twice (`lake.llm_calls`, `lake.eval_runs`); both fixed to composite `(id, ts)`. | [0003_llm_telemetry.py](packages/data-lake/data_lake/migrations/versions/0003_llm_telemetry.py), [0004_eval_runs.py](packages/data-lake/data_lake/migrations/versions/0004_eval_runs.py) |
+| **container layout assumption** | `Path(__file__).resolve().parents[4]` works in the source tree (`apps/orchestrator/orchestrator/plan/personas.py` → repo root) but the container layout (`/app/orchestrator/plan/personas.py`) has fewer parents and `IndexError`s at module import. Made the path lazy and honour `IIC_PERSONA_DIR`. | [apps/orchestrator/orchestrator/plan/personas.py](apps/orchestrator/orchestrator/plan/personas.py) |
+| **shared-package packaging** | The agent Dockerfiles `COPY` only their own dir, but the agents import `schema`, `featureflags`, `llm_client`, `data_bus`, `notifier`, `prompts`, `data_lake`. None of those are pip-installable from the agent images, and their transitive deps (`packaging`, `jinja2`, `structlog`, `redis`, `sqlalchemy`, `asyncpg`, `psycopg2-binary`, `opentelemetry-api`) aren't in the per-agent `requirements.txt`. **This is the structural one** — worth a real fix in T2.x rather than the dev-mode workaround that ships here (bind-mount each shared package over `/app/<pkg>` + a `dev-entrypoint.sh` that pip-installs the union of transitive deps). | [docker-compose.dev.yml](docker-compose.dev.yml) + [deploy/dev-entrypoint.sh](deploy/dev-entrypoint.sh) |
+| **Compose CMD/entrypoint interaction** | When you set `entrypoint:` in Compose, the image's `CMD` is also cleared. Each agent that overrides entrypoint must therefore also restate its `command:` explicitly. | [docker-compose.dev.yml](docker-compose.dev.yml) |
+
+The smoke-check passes 13/13 required services after these patches; agent_futu
+and grafana skip lines are intentional (profile-disabled in dev). The largest
+follow-up worth doing in a future iteration is the shared-package one: each
+agent should either `pip install -e ./packages/<pkg>` at build time or share a
+pre-built base image with all internal packages baked in. The dev bind-mount
+approach works, but it means the production image still has the import-time
+crash-loop.
+
 ## Specs
 
 - [`plan/EXECUTIVE_SUMMARY_bilingual.md`](plan/EXECUTIVE_SUMMARY_bilingual.md) — bilingual elevator pitch.

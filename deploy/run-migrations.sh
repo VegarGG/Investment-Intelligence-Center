@@ -40,7 +40,10 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # Resolve compose project name (matches the dir name by default).
-PROJECT_NAME="$(basename "${REPO_ROOT}" | tr -c '[:alnum:]_-' '_' | tr '[:upper:]' '[:lower:]')"
+# `basename` emits a trailing newline that `tr -c` would convert to an
+# extra `_`, producing e.g. `investment-intelligence-center__default`.
+# `printf %s` on a $(...) substitution drops the newline first.
+PROJECT_NAME="$(printf '%s' "$(basename "${REPO_ROOT}")" | tr -c '[:alnum:]_-' '_' | tr '[:upper:]' '[:lower:]')"
 NETWORK="${PROJECT_NAME}_default"
 
 echo "==> Waiting for Postgres to be healthy..."

@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE TABLE lake.eval_runs (
-          id               UUID PRIMARY KEY,
+          id               UUID NOT NULL,
           ts               TIMESTAMPTZ NOT NULL DEFAULT now(),
           caller_id        TEXT NOT NULL,
           prompt_version   TEXT NOT NULL,
@@ -32,7 +32,10 @@ def upgrade() -> None:
           mean_score       DOUBLE PRECISION NOT NULL,
           per_prompt       JSONB NOT NULL,
           baseline_score   DOUBLE PRECISION,
-          regression_flag  BOOLEAN NOT NULL DEFAULT false
+          regression_flag  BOOLEAN NOT NULL DEFAULT false,
+          -- TimescaleDB requires the partitioning column (ts) to be part
+          -- of any UNIQUE/PRIMARY KEY constraint.
+          PRIMARY KEY (id, ts)
         );
         """
     )
