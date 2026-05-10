@@ -1,0 +1,11 @@
+[Unit]
+Description=IIC v2.5 N3.0c — OpenTimestamps anchor of FUTU audit chain head at 04:00 local
+Documentation=workflows/42_FUTU_PHASE_B_REAL_OPEND.md
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

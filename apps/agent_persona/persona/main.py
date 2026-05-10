@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from .loader import load
+from .team_plan import team_plan_endpoint_payload
 from .types import PersonaSpec
 
 SERVICE = "agent_persona"
@@ -55,3 +56,8 @@ async def run_daily() -> dict[str, Any]:
 @app.post("/run/weekly")
 async def run_weekly() -> dict[str, Any]:
     return {"status": "queued", "slug": SLUG, "cadence": "weekly"}
+
+
+@app.post("/team_plan")
+async def team_plan(request: dict[str, Any]) -> dict[str, Any]:
+    return await team_plan_endpoint_payload(request)

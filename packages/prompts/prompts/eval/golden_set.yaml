@@ -663,3 +663,166 @@
   rubric:
     - "Scores item 1 as 0.5 or 0 (only one and a half sentences)"
     - "Rationale references the sentence count"
+
+# ============================================================ board.bull (3)
+- id: board.bull.001
+  caller_id: board.bull
+  inputs:
+    plans_block: "[01H1] team=fundamental action=buy entry=100 target=130 conf=0.70 thesis=10-Q margin of safety"
+  rubric:
+    - "Argues the long thesis"
+    - "Cites plan id [01H1] verbatim"
+    - "Stays under 180 words"
+
+- id: board.bull.002
+  caller_id: board.bull
+  inputs:
+    plans_block: "[01H2] team=quant action=hold conf=0.30 thesis=Net z=0.1, mixed signals"
+  rubric:
+    - "Refuses to fabricate a strong long case from a hold plan"
+    - "Cites plan id [01H2]"
+
+- id: board.bull.003
+  caller_id: board.bull
+  inputs:
+    plans_block: "[01H3] team=persona action=sell entry=100 target=80 conf=0.65"
+  rubric:
+    - "Argues against the sell"
+    - "Cites plan id [01H3]"
+    - "Does not invent prices"
+
+# ============================================================ board.bear (3)
+- id: board.bear.001
+  caller_id: board.bear
+  inputs:
+    plans_block: "[01B1] team=fundamental action=buy entry=100 target=130 conf=0.70"
+  rubric:
+    - "Identifies at least one downside risk"
+    - "Cites plan id [01B1]"
+    - "Stays under 180 words"
+
+- id: board.bear.002
+  caller_id: board.bear
+  inputs:
+    plans_block: "[01B2] team=quant action=buy entry=50 target=55 conf=0.55"
+  rubric:
+    - "Argues against the long"
+    - "Cites plan id [01B2]"
+
+- id: board.bear.003
+  caller_id: board.bear
+  inputs:
+    plans_block: "[01B3] team=persona action=hold conf=0.30"
+  rubric:
+    - "Reinforces the hold case (no need to invent a short)"
+    - "Cites plan id [01B3]"
+
+# ============================================================ board.risk_aggressive (3)
+- id: board.risk_aggressive.001
+  caller_id: board.risk_aggressive
+  inputs:
+    plans_block: "[01RA1] team=fundamental action=buy sizing=2.0% conf=0.70"
+  rubric:
+    - "Argues for higher sizing than 2.0%"
+    - "Caps the recommendation at the 5% NAV ceiling"
+
+- id: board.risk_aggressive.002
+  caller_id: board.risk_aggressive
+  inputs:
+    plans_block: "[01RA2] team=quant action=hold conf=0.20"
+  rubric:
+    - "Acknowledges the low conviction does not warrant aggressive sizing"
+
+- id: board.risk_aggressive.003
+  caller_id: board.risk_aggressive
+  inputs:
+    plans_block: "[01RA3] team=persona action=sell sizing=3.0% conf=0.80"
+  rubric:
+    - "Argues for full position size"
+    - "Cites plan id [01RA3]"
+
+# ============================================================ board.risk_conservative (3)
+- id: board.risk_conservative.001
+  caller_id: board.risk_conservative
+  inputs:
+    plans_block: "[01RC1] team=fundamental action=buy sizing=4.0% conf=0.70"
+  rubric:
+    - "Argues for sizing below 4.0%"
+    - "Names at least one tail risk"
+
+- id: board.risk_conservative.002
+  caller_id: board.risk_conservative
+  inputs:
+    plans_block: "[01RC2] team=quant action=buy sizing=2.0% conf=0.50"
+  rubric:
+    - "Suggests trimming or waiting for confirmation"
+
+- id: board.risk_conservative.003
+  caller_id: board.risk_conservative
+  inputs:
+    plans_block: "[01RC3] team=persona action=sell sizing=3.0% conf=0.80"
+  rubric:
+    - "Notes the asymmetric risk of shorting"
+    - "Argues for sizing below 3.0%"
+
+# ============================================================ board.risk_neutral (3)
+- id: board.risk_neutral.001
+  caller_id: board.risk_neutral
+  inputs:
+    plans_block: "[01RN1] team=fundamental action=buy sizing=4.0% conf=0.70"
+    aggressive_view: "Size to 5%."
+    conservative_view: "Size to 1.5%."
+  rubric:
+    - "Synthesises the two views"
+    - "Recommends a sizing between 1.5% and 5%"
+
+- id: board.risk_neutral.002
+  caller_id: board.risk_neutral
+  inputs:
+    plans_block: "[01RN2] team=quant action=hold conf=0.30"
+    aggressive_view: "Stay flat."
+    conservative_view: "Stay flat."
+  rubric:
+    - "Concurs with hold"
+
+- id: board.risk_neutral.003
+  caller_id: board.risk_neutral
+  inputs:
+    plans_block: "[01RN3] team=persona action=sell sizing=3.0% conf=0.80"
+    aggressive_view: "Size to 5%."
+    conservative_view: "Size to 1%."
+  rubric:
+    - "Picks a midpoint"
+    - "Cites both prior takes"
+
+# ============================================================ board.chair (3)
+- id: board.chair.001
+  caller_id: board.chair
+  inputs:
+    plans_block: "[01C1] team=fundamental action=buy conf=0.70\n[01C2] team=quant action=hold conf=0.30"
+    bull_summary: "Buy the fundamental thesis."
+    bear_summary: "Macro headwinds."
+  rubric:
+    - "Returns valid JSON with chosen_plan_id in {01C1, 01C2}"
+    - "dissent_record cites both plan ids"
+    - "confidence is in [0, 1]"
+
+- id: board.chair.002
+  caller_id: board.chair
+  inputs:
+    plans_block: "[01C3] team=persona action=hold conf=0.40"
+    bull_summary: "(no bull case)"
+    bear_summary: "(no bear case)"
+  rubric:
+    - "Returns valid JSON with chosen_plan_id = 01C3"
+    - "dissent_record may be empty (only one plan)"
+
+- id: board.chair.003
+  caller_id: board.chair
+  inputs:
+    plans_block: "[01C4] team=quant action=sell conf=0.65\n[01C5] team=fundamental action=buy conf=0.50"
+    bull_summary: "Buy on filing."
+    bear_summary: "Sell on regime."
+  rubric:
+    - "Picks one plan, not both"
+    - "dissent_record cites the rejected plan by id"

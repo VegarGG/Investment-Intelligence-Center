@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-PHASES=("chaos" "walk_forward" "observability" "cost_cap")
+PHASES=("chaos" "walk_forward" "observability" "cost_cap" "trading_room_replay" "futu_readonly")
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 ART_DIR="${BURN_IN_ART_DIR:-./burn_in_artifacts/${TS}}"
 mkdir -p "${ART_DIR}"
@@ -80,10 +80,38 @@ phase_cost_cap() {
     | tee "${ART_DIR}/phase4_cost_cap.log"
 }
 
-run_phase "chaos"          phase_chaos
-run_phase "walk_forward"   phase_walk_forward
-run_phase "observability"  phase_observability
-run_phase "cost_cap"       phase_cost_cap
+# v2.5 N3.7 — Phase 5: Trading-room replay.
+# Replay 30 days of synthetic high-impact events through the trading-room
+# DAG. Asserts each emits exactly one BoardDecisionV1; brief markdowns are
+# diffable against the golden directory.
+phase_trading_room_replay() {
+  poetry run pytest -q \
+    apps/orchestrator/tests/test_trading_room_dag_e2e.py \
+    apps/agent_board/tests/test_e2e_board.py \
+    tests/test_trading_room_brief_format.py \
+    | tee "${ART_DIR}/phase5_trading_room_replay.log"
+}
+
+# v2.5 N3.7 — Phase 6: FUTU read-only enforcement.
+# Synthetic mode runs the pentest against FakeOpenD. Real mode (gated on
+# IIC_RUN_FUTU_LIVE=1) additionally exercises the live OpenD container.
+phase_futu_readonly() {
+  if [ "${IIC_RUN_FUTU_LIVE:-0}" = "1" ]; then
+    poetry run pytest -q tests/penetration/ tests/chaos/test_audit_chain_otp_anchor.py \
+      | tee "${ART_DIR}/phase6_futu_readonly.log"
+  else
+    log "IIC_RUN_FUTU_LIVE not set; running synthetic-only pentest"
+    poetry run pytest -q tests/penetration/test_futu_readonly_pentest.py \
+      | tee "${ART_DIR}/phase6_futu_readonly.log"
+  fi
+}
+
+run_phase "chaos"               phase_chaos
+run_phase "walk_forward"        phase_walk_forward
+run_phase "observability"       phase_observability
+run_phase "cost_cap"            phase_cost_cap
+run_phase "trading_room_replay" phase_trading_room_replay
+run_phase "futu_readonly"       phase_futu_readonly
 
 # ---- artifact -------------------------------------------------------------
 cat > "${ART_DIR}/summary.json" <<JSON

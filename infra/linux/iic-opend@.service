@@ -1,0 +1,35 @@
+[Unit]
+Description=IIC v2.5 N3.6 — Futu OpenD instance %i (read-only / SIMULATE only)
+Documentation=workflows/42_FUTU_PHASE_B_REAL_OPEND.md
+After=docker.service network.target
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=15
+TimeoutStartSec=120
+
+# %i is the futu_id_hash — one OpenD instance per Futu account.
+Environment=FUTU_ID_HASH=%i
+Environment=OPEND_CONFIG_DIR=/srv/iic/futu/%i/openD-config
+Environment=OPEND_TRD_ENV=SIMULATE
+
+# tmpfs-mount the decrypted credential file so it never lives on disk.
+ExecStartPre=/usr/bin/install -d -m 0700 /run/iic/futu-%i
+ExecStartPre=/usr/local/bin/iic-decrypt-secrets.sh futu/%i /run/iic/futu-%i/secret
+ExecStartPre=/bin/mount -t tmpfs -o size=1m,uid=0,mode=0700 tmpfs /run/iic/futu-%i
+
+# Refuse to start if TrdEnv != SIMULATE. The wrapper script enforces this
+# with a hard pre-flight check; iic-opend-start.sh exits non-zero on LIVE.
+ExecStart=/usr/local/bin/iic-opend-start.sh %i
+
+ExecStopPost=/bin/umount /run/iic/futu-%i
+ExecStopPost=/bin/rm -rf /run/iic/futu-%i
+
+# Network namespace: outbound iptables rules apply (see infra/linux/iptables/futu.rules).
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -7,6 +7,8 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from .team_plan import team_plan_endpoint_payload
+
 SERVICE = "agent_quant"
 PORT = int(os.environ.get("PORT", "8083"))
 app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0")
@@ -35,3 +37,8 @@ async def run_walk_forward() -> dict[str, Any]:
 @app.get("/factors/explain/{ticker}/{asof}")
 async def explain(ticker: str, asof: str) -> dict[str, Any]:
     return {"ticker": ticker, "asof": asof, "factors": []}
+
+
+@app.post("/team_plan")
+async def team_plan(request: dict[str, Any]) -> dict[str, Any]:
+    return await team_plan_endpoint_payload(request)

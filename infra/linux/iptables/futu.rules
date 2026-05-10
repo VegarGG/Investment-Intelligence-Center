@@ -1,0 +1,51 @@
+# v2.5 N3.6 — Outbound iptables rules for the Futu OpenD network namespace.
+#
+# Allow ONLY the Futu market endpoints + the local OpenD socket the IIC
+# wrapper talks to. Deny everything else, including the trade endpoints.
+# Per docs/security/FUTU_readonly_review.md §3.
+#
+# Apply with:
+#   nft -f infra/linux/iptables/futu.rules
+#
+# Verify with:
+#   nft list ruleset
+#   tests/integration/test_futu_firewall.py (Mac mini host only)
+
+table inet iic_futu {
+    chain output {
+        type filter hook output priority 0; policy drop;
+
+        # Local loopback for the OpenD ↔ wrapper socket.
+        oifname "lo" accept
+        ct state established,related accept
+
+        # DNS to system resolvers (UDP+TCP).
+        ip daddr { 1.1.1.1, 8.8.8.8 } udp dport 53 accept
+        ip daddr { 1.1.1.1, 8.8.8.8 } tcp dport 53 accept
+
+        # Futu market data endpoints (read-only). Hostnames resolve to
+        # rotating IPs, so we allow the FQDNs by ipset; the firewall's
+        # cron refreshes the ipset every 5 minutes.
+        ip daddr @futu_market_endpoints tcp dport 443 accept
+
+        # Explicit DENY for the trade endpoints. Belt-and-braces — the
+        # default-drop policy already covers them, but we want the
+        # journal to record an ATTEMPT if a future code path tries.
+        ip daddr @futu_trade_endpoints log prefix "iic_futu_trade_block: " drop
+
+        # Everything else: drop (default policy).
+    }
+}
+
+set futu_market_endpoints {
+    type ipv4_addr
+    flags interval
+    # Populated by /usr/local/bin/iic-futu-firewall-refresh.sh — initial
+    # entries are the well-known market hosts as of N3.6 sign-off date.
+}
+
+set futu_trade_endpoints {
+    type ipv4_addr
+    flags interval
+    # Populated by the same refresh script.
+}

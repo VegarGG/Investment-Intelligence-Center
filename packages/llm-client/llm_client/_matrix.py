@@ -75,6 +75,19 @@ MATRIX: dict[str, CallerSpec] = {
     "secretary.brief.morning": CallerSpec(default_tier="pro", escalate_when=_always),
     "secretary.brief.midday": CallerSpec(default_tier="flash"),
     "orchestrator.plan": CallerSpec(default_tier="pro", escalate_when=_always),
+    # v2.5 N3.1 — Event-Triage Gate (LLM tie-break only when numeric scores
+    # straddle the boundary). Flash by default; small token budget.
+    "event_triage": CallerSpec(default_tier="flash"),
+    # v2.5 N3.2 — persona team_plan synthesizer (consensus thesis rollup).
+    "persona.team_plan": CallerSpec(default_tier="flash"),
+    # v2.5 N3.3 — Investment Board sub-agents.
+    "board.bull": CallerSpec(default_tier="flash"),
+    "board.bear": CallerSpec(default_tier="flash"),
+    "board.risk_aggressive": CallerSpec(default_tier="flash"),
+    "board.risk_conservative": CallerSpec(default_tier="flash"),
+    "board.risk_neutral": CallerSpec(default_tier="flash"),
+    # The Chair is the only Pro-tier call per board decision (≤ $0.05 budget).
+    "board.chair": CallerSpec(default_tier="pro", escalate_when=_always),
 }
 
 

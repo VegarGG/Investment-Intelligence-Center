@@ -1,0 +1,14 @@
+[Unit]
+Description=IIC v2.5 N3.0c — Daily OpenTimestamps anchor of lake.futu_audit chain head
+Documentation=workflows/42_FUTU_PHASE_B_REAL_OPEND.md
+Requires=docker.service
+After=docker.service iic.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/iic
+EnvironmentFile=-/etc/iic/futu-audit.env
+ExecStart=/usr/local/bin/futu-audit-anchor.sh
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=600

@@ -12,6 +12,7 @@ import { Leaderboard } from "./routes/Leaderboard";
 import { Personas } from "./routes/Personas";
 import { Quant } from "./routes/Quant";
 import { TradeTape } from "./routes/TradeTape";
+import { TradingRoom } from "./routes/TradingRoom";
 import { WatchlistAdmin } from "./routes/admin/Watchlist";
 
 const queryClient = new QueryClient({
@@ -34,6 +35,7 @@ export function App() {
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/agents/:agent" element={<AgentFeed />} />
             <Route path="/tape" element={<TradeTape />} />
+            <Route path="/trading-room" element={<TradingRoom />} />
             <Route path="/intel" element={<Intel />} />
             <Route path="/quant" element={<Quant />} />
             <Route path="/fundamental" element={<Fundamental />} />

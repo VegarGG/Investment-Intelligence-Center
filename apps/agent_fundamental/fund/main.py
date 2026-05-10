@@ -7,6 +7,8 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from .team_plan import team_plan_endpoint_payload
+
 SERVICE = "agent_fundamental"
 PORT = int(os.environ.get("PORT", "8082"))
 app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0")
@@ -32,3 +34,8 @@ async def run_cover(ticker: str) -> dict[str, Any]:
 @app.post("/run/digest")
 async def run_digest() -> dict[str, Any]:
     return {"status": "queued"}
+
+
+@app.post("/team_plan")
+async def team_plan(request: dict[str, Any]) -> dict[str, Any]:
+    return await team_plan_endpoint_payload(request)

@@ -65,17 +65,35 @@ Out of scope:
 
 ### B3.3b (NEXT iteration — gated by Ziwei sign-off)
 
-- [ ] Real OpenD container per Futu ID, port 11111+, separate bind-mount per ID.
-- [ ] `TrdEnv.SIMULATE` (paper account) ONLY for the first real-OpenD light-up.
-- [ ] Outbound firewall rule (table below) verified on the host.
-- [ ] Penetration test: attempt to call `place_order` via every plausible bypass:
-  - Direct attribute access on the underlying SDK context.
-  - Dynamic `getattr` against the wrapper.
-  - Raw socket to the OpenD port.
-  - Each path must fail (wrapper rejects, firewall blocks, or FUTU rejects
-    because `unlock_trade` was never called).
-- [ ] Daily OpenTimestamps anchor of the audit-chain head verified for 7 consecutive days.
-- [ ] Ziwei reads + signs the bottom of this document.
+Scaffolding shipped in iteration N3 (this document remains in DRAFT until
+Ziwei signs §5):
+
+- [x] `infra/linux/iic-opend@.service` — systemd template, one instance per Futu ID.
+- [x] `infra/linux/scripts/iic-opend-start.sh` — refuses any `OPEND_TRD_ENV != SIMULATE`.
+- [x] `infra/linux/iptables/futu.rules` — outbound nftables ruleset (default-drop;
+      explicit allow for market endpoints; explicit logged-deny for trade endpoints).
+- [x] `lake.futu_audit` Postgres-backed audit ledger (migration 0005) with
+      BEFORE INSERT chain-linkage trigger and revoked UPDATE/DELETE on `iic_app`.
+- [x] `infra/linux/scripts/futu-audit-anchor.sh` + `iic-futu-audit-anchor.timer` —
+      daily OpenTimestamps anchor of the chain head; ots-stamp produces a `.ots`
+      proof under `/srv/iic/futu-audit-anchors/<YYYY-MM-DD>.head.ots`.
+- [x] `tests/penetration/test_futu_readonly_pentest.py` — every plausible bypass
+      (direct attr, dynamic getattr, underlying SDK injection, setattr).
+- [x] `tests/chaos/test_audit_chain_otp_anchor.py` — verifies the last 7 daily
+      anchor pairs; calls `ots verify` against `commits.opentimestamps.org`
+      when `IIC_RUN_FUTU_LIVE=1`.
+
+Sign-off-gated steps (Phase B3.3b proper, NOT yet performed):
+
+- [ ] `TrdEnv.SIMULATE` (paper account) light-up of one OpenD instance.
+- [ ] Outbound firewall rules applied + verified by `nft list ruleset` on the
+      Mac mini host.
+- [ ] Penetration test against the real OpenD (run with `IIC_RUN_FUTU_LIVE=1`).
+- [ ] Daily OpenTimestamps anchor verified for 7 consecutive days against
+      `commits.opentimestamps.org`.
+- [ ] `agent_futu.enabled` flag flips to ON in `flags.yaml` and one full
+      morning_brief run with FUTU portfolio context attached.
+- [ ] Ziwei reads + signs §5 of this document.
 
 ### Outbound firewall rule table (B3.3b)
 

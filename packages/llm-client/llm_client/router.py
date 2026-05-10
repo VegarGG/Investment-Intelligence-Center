@@ -274,5 +274,26 @@ async def chat(
     )
 
 
+async def chat_or_skip(
+    caller_id: str,
+    messages: list[ChatMessage],
+    *,
+    force_tier: LlmTier | None = None,
+    max_tokens: int = 1024,
+    temperature: float = 0.4,
+    timeout_s: float = 30.0,
+    drain_deadline_s: float = 30.0,
+) -> ChatResponse:
+    return await get_router().chat_or_skip(
+        caller_id,
+        messages,
+        force_tier=force_tier,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        timeout_s=timeout_s,
+        drain_deadline_s=drain_deadline_s,
+    )
+
+
 async def embed(caller_id: str, texts: list[str]) -> EmbedResponse:
     return await get_router().embed(caller_id, texts)

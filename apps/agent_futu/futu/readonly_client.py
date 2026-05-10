@@ -31,7 +31,7 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from .audit import FutuAuditLog
+from .audit import FutuAuditLogProtocol, InMemoryFutuAuditLog
 
 log = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class FutuReadOnlyClient:
 
     openD: _OpenDLike
     futu_id_hash: str
-    audit: FutuAuditLog = field(default_factory=FutuAuditLog)
+    audit: FutuAuditLogProtocol = field(default_factory=InMemoryFutuAuditLog)
     # Set to True only by tests that explicitly want to exercise the audit
     # log without a real underlying SDK; production agents leave it False.
     test_mode: bool = False
