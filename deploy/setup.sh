@@ -201,6 +201,57 @@ do_docker() {
   say "      'docker' group membership to take effect on your shell."
 }
 
+# --- ensure: docker socket is reachable as the current user ------------------
+# After `do_docker` adds us to the docker group, the new group is NOT yet
+# active in this shell — `usermod -aG` only takes effect on next login.
+# That's the "permission denied connecting to docker.sock" error a fresh
+# `make setup` always hits.
+#
+# Fix: detect the case and re-exec ourselves under `sg docker -c …`, which
+# spawns a subprocess with `docker` as a supplementary group right now.
+# Markers under MARKER_DIR mean previously-finished steps (apt, docker,
+# data_tree, secrets, flags) are skipped on the re-exec, so we pick up
+# exactly where we left off.
+ensure_docker_access() {
+  if [[ "${DRY_RUN}" -eq 1 ]]; then
+    return 0
+  fi
+
+  # If docker info works as the current user, we're golden.
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Maybe the daemon isn't running yet (rare — do_docker ran systemctl).
+  if ! [ -S /var/run/docker.sock ]; then
+    fail "/var/run/docker.sock is missing — is the docker daemon running? Try 'sudo systemctl start docker'."
+  fi
+
+  # Daemon is up but our session can't reach it. If we're already in the
+  # docker group on disk, re-exec under sg docker so the supplementary
+  # group becomes active.
+  local user; user="${SUDO_USER:-$(id -un)}"
+  if getent group docker 2>/dev/null | tr ',' '\n' | grep -qx "${user}"; then
+    if [[ -z "${IIC_SETUP_REEXEC_DONE:-}" ]]; then
+      say "User '${user}' is in the docker group, but the new membership"
+      say "isn't active in this shell yet. Re-executing under 'sg docker'..."
+      export IIC_SETUP_REEXEC_DONE=1
+      # `sg <group> -c "<cmd>"` runs <cmd> with <group> as primary group
+      # of the spawned process. Bash quotes the argv via printf %q so
+      # paths with spaces (the common case here — repo dir has spaces)
+      # survive the re-exec.
+      local quoted=""
+      for a in "$@"; do
+        quoted+="$(printf '%q ' "${a}")"
+      done
+      exec sg docker -c "bash $(printf '%q' "${BASH_SOURCE[0]}") ${quoted}"
+    fi
+    fail "Re-exec under 'sg docker' still can't reach the daemon. Log out, log back in, then re-run 'make setup'."
+  fi
+
+  fail "Cannot connect to /var/run/docker.sock as user '${user}'. Add yourself to the docker group: 'sudo usermod -aG docker ${user}', then log out and back in."
+}
+
 # --- step: data dir tree under /srv/iic --------------------------------------
 do_data_tree() {
   local user; user="${SUDO_USER:-$(id -un)}"
@@ -389,6 +440,12 @@ echo ""
 
 step apt_base       do_apt_base
 step docker         do_docker
+
+# After do_docker installs and adds us to the group, the rest of the
+# script needs to talk to /var/run/docker.sock. The new group isn't
+# active in *this* shell yet, so we may need to re-exec under sg docker.
+ensure_docker_access "$@"
+
 step data_tree      do_data_tree
 step secrets        do_secrets
 step flags          do_flags

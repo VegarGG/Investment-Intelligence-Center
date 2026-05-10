@@ -209,15 +209,21 @@ PYTHONPATH=packages/featureflags:packages/schema:packages/llm-client:packages/da
 
 ## 7. Troubleshooting
 
-### "permission denied" running docker compose
+### "permission denied while trying to connect to the Docker daemon socket"
 
-The `setup.sh` script added your user to the `docker` group, but the change only takes effect in a new login session. Three fixes (pick one):
+This was the most common first-run failure: `usermod -aG docker` only takes effect in a new login session, but you're still running `make setup` in the old session.
+
+**`setup.sh` now handles this automatically** — it detects the case and re-execs itself under `sg docker` so the rest of the steps inherit the new group. If you saw this error on an older version, re-run `make setup` and it should now sail through.
+
+If the auto-fix somehow doesn't kick in, three manual fixes (pick one):
 
 ```bash
-# 1) Open a new terminal tab/window
-# 2) Run `newgrp docker` in the current shell
-# 3) Log out + log back in
+# 1) Open a new terminal tab/window, then re-run `make setup`
+# 2) In the current shell: `newgrp docker` then `make setup`
+# 3) Log out + log back in, then re-run `make setup`
 ```
+
+Either way the markers under `/var/lib/iic-deploy/` mean already-finished steps are skipped — you pick up exactly where it failed.
 
 ### Postgres won't start / "no space left on device"
 

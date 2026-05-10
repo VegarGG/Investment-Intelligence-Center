@@ -30,6 +30,15 @@ source "${POSTGRES_ENV}"
 POSTGRES_USER_VAL="${POSTGRES_USER:-iic}"
 POSTGRES_DB_VAL="${POSTGRES_DB:-iic}"
 
+# Sanity check: can we talk to docker? If not, fail with a useful hint
+# instead of a confusing error from the next docker compose call.
+if ! docker info >/dev/null 2>&1; then
+  echo "ERROR: cannot reach the docker daemon as $(id -un)." >&2
+  echo "       If you just ran setup.sh, log out + log back in (or run" >&2
+  echo "       'newgrp docker' in this shell) and re-run 'make migrate'." >&2
+  exit 1
+fi
+
 # Resolve compose project name (matches the dir name by default).
 PROJECT_NAME="$(basename "${REPO_ROOT}" | tr -c '[:alnum:]_-' '_' | tr '[:upper:]' '[:lower:]')"
 NETWORK="${PROJECT_NAME}_default"
