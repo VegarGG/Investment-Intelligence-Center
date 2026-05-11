@@ -33,7 +33,13 @@ services:
 
   postgres:
     <<: *iic-base
-    image: timescale/timescaledb-ha:pg16
+    # Custom image: timescale/timescaledb-ha:pg16 + pg_partman, which
+    # migration 0001 needs for the monthly-partitioned lake.events table.
+    # The upstream HA image doesn't bundle pg_partman.
+    build:
+      context: ./infra/postgres
+      dockerfile: Dockerfile
+    image: iic-postgres:pg16-partman
     container_name: iic-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER}

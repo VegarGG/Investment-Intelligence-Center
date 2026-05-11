@@ -26,7 +26,7 @@ def upgrade() -> None:
     op.execute(
         """
         CREATE TABLE lake.llm_calls (
-          id              UUID PRIMARY KEY,
+          id              UUID NOT NULL,
           ts              TIMESTAMPTZ NOT NULL DEFAULT now(),
           caller_id       TEXT NOT NULL,
           tier            TEXT NOT NULL CHECK (tier IN ('flash','pro','embed')),
@@ -40,7 +40,10 @@ def upgrade() -> None:
           outcome         TEXT NOT NULL CHECK (outcome IN ('ok','error','timeout','rate_limit')),
           error           TEXT,
           request_hash    BYTEA,
-          response_hash   BYTEA
+          response_hash   BYTEA,
+          -- TimescaleDB requires the partitioning column (ts) to participate
+          -- in any UNIQUE/PRIMARY KEY constraint, so use a composite PK.
+          PRIMARY KEY (id, ts)
         );
         """
     )

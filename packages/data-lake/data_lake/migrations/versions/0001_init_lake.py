@@ -22,13 +22,17 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # ---- schemas first -----------------------------------------------------
+    # `CREATE EXTENSION ... SCHEMA partman` requires the target schema to
+    # already exist (Postgres does not auto-create it), so do schemas before
+    # extensions.
+    op.execute("CREATE SCHEMA IF NOT EXISTS lake")
+    op.execute("CREATE SCHEMA IF NOT EXISTS partman")
+
     # ---- extensions -------------------------------------------------------
     op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_partman SCHEMA partman")
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
-
-    op.execute("CREATE SCHEMA IF NOT EXISTS lake")
-    op.execute("CREATE SCHEMA IF NOT EXISTS partman")
 
     # ---- lake.events (PARTITIONED, monthly, via pg_partman) ---------------
     op.execute(
@@ -54,12 +58,15 @@ def upgrade() -> None:
     op.execute("CREATE INDEX events_event_ts_idx ON lake.events (event_ts DESC)")
     op.execute("CREATE INDEX events_source_idx ON lake.events (source_id, event_ts DESC)")
     op.execute("CREATE INDEX events_raw_gin ON lake.events USING gin (raw jsonb_path_ops)")
+    # pg_partman 5.x replaced the 'native' partition type with 'range'
+    # (declarative partitioning is now the only supported mode and the type
+    # value was renamed). p_premake is still supported.
     op.execute(
         """
         SELECT partman.create_parent(
           p_parent_table := 'lake.events',
           p_control      := 'event_ts',
-          p_type         := 'native',
+          p_type         := 'range',
           p_interval     := '1 month',
           p_premake      := 4
         );
