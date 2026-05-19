@@ -29,7 +29,7 @@ class TelemetrySink(Protocol):
         *,
         caller_id: str,
         request: list[ChatMessage],
-        response: ChatResponse,
+        response: ChatResponse | None,
         outcome: Outcome,
         error: str | None,
     ) -> None: ...
@@ -43,7 +43,7 @@ class NullTelemetrySink:
         *,
         caller_id: str,
         request: list[ChatMessage],
-        response: ChatResponse,
+        response: ChatResponse | None,
         outcome: Outcome,
         error: str | None,
     ) -> None:
@@ -61,26 +61,38 @@ class CapturingTelemetrySink:
         *,
         caller_id: str,
         request: list[ChatMessage],
-        response: ChatResponse,
+        response: ChatResponse | None,
         outcome: Outcome,
         error: str | None,
     ) -> None:
-        self.calls.append(
-            {
-                "caller_id": caller_id,
-                "tier": response.tier,
-                "model": response.model,
-                "cost_usd": response.cost_usd,
-                "cached": response.cached,
-                "fallback_used": response.fallback_used,
-                "outcome": outcome,
-                "error": error,
-            }
-        )
+        row: dict[str, object] = {
+            "caller_id": caller_id,
+            "outcome": outcome,
+            "error": error,
+            "tier": None,
+            "model": None,
+            "cost_usd": 0.0,
+            "cached": False,
+            "fallback_used": False,
+        }
+        if response is not None:
+            row.update(
+                tier=response.tier,
+                model=response.model,
+                cost_usd=response.cost_usd,
+                cached=response.cached,
+                fallback_used=response.fallback_used,
+            )
+        self.calls.append(row)
 
 
 class PostgresTelemetrySink:
-    """Production sink — writes one row to lake.llm_calls per call."""
+    """Production sink — writes one row to lake.llm_calls per call.
+
+    P0.6: every call outcome lands here, including ``error`` /
+    ``timeout`` / ``rate_limit`` / ``skipped``. Missing fields default
+    to safe zero values so the row schema is uniform.
+    """
 
     def __init__(self, sessionmaker: object) -> None:
         # sessionmaker is a sqlalchemy.ext.asyncio.async_sessionmaker; typed
@@ -92,7 +104,7 @@ class PostgresTelemetrySink:
         *,
         caller_id: str,
         request: list[ChatMessage],
-        response: ChatResponse,
+        response: ChatResponse | None,
         outcome: Outcome,
         error: str | None,
     ) -> None:
@@ -102,7 +114,26 @@ class PostgresTelemetrySink:
             [m.model_dump() for m in request], option=orjson.OPT_SORT_KEYS
         )
         request_hash = hashlib.sha256(request_canonical).digest()
-        response_hash = hashlib.sha256(response.text.encode()).digest()
+        if response is not None:
+            tier = response.tier
+            model = response.model
+            pt = response.prompt_tokens
+            ct = response.completion_tokens
+            cost = response.cost_usd
+            latency = response.latency_ms
+            cached = response.cached
+            fallback = response.fallback_used
+            response_hash = hashlib.sha256(response.text.encode()).digest()
+        else:
+            tier = "flash"
+            model = f"no-response:{outcome}"
+            pt = 0
+            ct = 0
+            cost = 0.0
+            latency = 0
+            cached = False
+            fallback = False
+            response_hash = hashlib.sha256(b"").digest()
         async with self._sm() as session:  # type: ignore[operator]
             await session.execute(
                 text(
@@ -119,14 +150,14 @@ class PostgresTelemetrySink:
                 {
                     "id": str(uuid.uuid4()),
                     "caller_id": caller_id,
-                    "tier": response.tier,
-                    "model": response.model,
-                    "pt": response.prompt_tokens,
-                    "ct": response.completion_tokens,
-                    "cost": response.cost_usd,
-                    "latency": response.latency_ms,
-                    "cached": response.cached,
-                    "fallback": response.fallback_used,
+                    "tier": tier,
+                    "model": model,
+                    "pt": pt,
+                    "ct": ct,
+                    "cost": cost,
+                    "latency": latency,
+                    "cached": cached,
+                    "fallback": fallback,
                     "outcome": outcome,
                     "error": error,
                     "req_hash": request_hash,
@@ -141,7 +172,7 @@ def fire_and_forget(
     *,
     caller_id: str,
     request: list[ChatMessage],
-    response: ChatResponse,
+    response: ChatResponse | None,
     outcome: Outcome,
     error: str | None,
 ) -> None:

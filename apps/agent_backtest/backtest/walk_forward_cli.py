@@ -22,7 +22,10 @@ from backtest.walk_forward import (
 
 
 def _default_fixture() -> Path:
-    return Path(__file__).resolve().parents[1] / "fixtures" / "historical_advice.jsonl"
+    # parent.parent = apps/agent_backtest (this file is at
+    # apps/agent_backtest/backtest/walk_forward_cli.py). Intra-package
+    # sibling resolution — not a repo-root walk, so no repo_root() call.
+    return Path(__file__).resolve().parent.parent / "fixtures" / "historical_advice.jsonl"
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import time
 
 import pytest
+from llm_client import rate_limiter as rl_module
 from llm_client.rate_limiter import BucketConfig, RateLimiter
 
 
@@ -53,3 +55,32 @@ class TestConcurrencyCap:
 
         await asyncio.gather(*(call() for _ in range(10)))
         assert peak <= 2, f"concurrency cap breached: peak={peak}"
+
+
+class TestEnvOverrides:
+    """P0.4 — IIC_RATE_<PROVIDER>_<TIER>=<rps> applies at module load."""
+
+    def test_env_overrides_rps(self, monkeypatch) -> None:
+        monkeypatch.setenv("IIC_RATE_DEEPSEEK_PRO", "8")
+        importlib.reload(rl_module)
+        cfg = rl_module.DEFAULTS[("deepseek", "pro")]
+        assert cfg.rps == 8.0
+        # Concurrency inherits from the builtin default.
+        assert cfg.concurrency == 4
+
+    def test_env_overrides_concurrency(self, monkeypatch) -> None:
+        monkeypatch.setenv("IIC_RATE_DEEPSEEK_PRO_CONC", "1")
+        importlib.reload(rl_module)
+        cfg = rl_module.DEFAULTS[("deepseek", "pro")]
+        assert cfg.concurrency == 1
+
+    def test_bad_env_value_ignored(self, monkeypatch) -> None:
+        monkeypatch.setenv("IIC_RATE_DEEPSEEK_PRO", "not-a-number")
+        importlib.reload(rl_module)
+        cfg = rl_module.DEFAULTS[("deepseek", "pro")]
+        # Falls back to the builtin default.
+        assert cfg.rps == 6.0
+
+    def teardown_method(self, method) -> None:
+        # Restore the default module state after monkeypatching env.
+        importlib.reload(rl_module)

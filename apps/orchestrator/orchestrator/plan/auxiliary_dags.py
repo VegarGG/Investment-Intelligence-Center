@@ -164,6 +164,63 @@ def build_evening_recap_dag(client: AgentClient) -> StateGraph[_SimpleState]:
     return g
 
 
+# ---- P2.9 — fine-grained intel pulls ---------------------------------------
+def build_intel_rss_pull_dag(client: AgentClient) -> StateGraph[_SimpleState]:
+    """RSS pull every 5 minutes (P2.9). Lightweight — no synth, no notify.
+
+    The intel agent's `pull?source=rss` exposes the same internal entry
+    that `synth` uses; here we just trigger the fetch + dedupe so the
+    next synth has fresh material.
+    """
+    g: StateGraph[_SimpleState] = StateGraph("intel_rss_pull")
+    intel_soft, intel_hard = SLA_TABLE.get("intel.synth", (60, 90))
+
+    async def n_pull(state: _SimpleState) -> dict[str, Any]:
+        result = await client.call(
+            "agent_intelligence",
+            {"action": "pull", "source": "rss", "trace_id": state.trace_id},
+        )
+        return {"node": "n_pull", "accepted_n": len(result.get("accepted_event_ids") or [])}
+
+    g.add_node("n_pull", n_pull, soft_timeout_s=intel_soft, hard_timeout_s=intel_hard)
+    g.set_entry("n_pull")
+    return g
+
+
+def build_intel_gdelt_pull_dag(client: AgentClient) -> StateGraph[_SimpleState]:
+    """GDELT GKG pull every 15 minutes (P2.9)."""
+    g: StateGraph[_SimpleState] = StateGraph("intel_gdelt_pull")
+    intel_soft, intel_hard = SLA_TABLE.get("intel.synth", (60, 90))
+
+    async def n_pull(state: _SimpleState) -> dict[str, Any]:
+        result = await client.call(
+            "agent_intelligence",
+            {"action": "pull", "source": "gdelt", "trace_id": state.trace_id},
+        )
+        return {"node": "n_pull", "accepted_n": len(result.get("accepted_event_ids") or [])}
+
+    g.add_node("n_pull", n_pull, soft_timeout_s=intel_soft, hard_timeout_s=intel_hard)
+    g.set_entry("n_pull")
+    return g
+
+
+def build_intel_macro_pull_dag(client: AgentClient) -> StateGraph[_SimpleState]:
+    """FRED macro pull (P2.9). Hourly during business hours; cheap."""
+    g: StateGraph[_SimpleState] = StateGraph("intel_macro_pull")
+    intel_soft, intel_hard = SLA_TABLE.get("intel.synth", (60, 90))
+
+    async def n_pull(state: _SimpleState) -> dict[str, Any]:
+        result = await client.call(
+            "agent_intelligence",
+            {"action": "pull", "source": "macro", "trace_id": state.trace_id},
+        )
+        return {"node": "n_pull", "series_n": len(result.get("series") or [])}
+
+    g.add_node("n_pull", n_pull, soft_timeout_s=intel_soft, hard_timeout_s=intel_hard)
+    g.set_entry("n_pull")
+    return g
+
+
 # ---- hourly_intel_pulse -----------------------------------------------------
 def build_hourly_intel_dag(client: AgentClient) -> StateGraph[_SimpleState]:
     """Intel agent hourly synthesize → push intel.digest.v1 (plan §T1.5c).
@@ -304,6 +361,9 @@ __all__ = [
     "build_evening_recap_dag",
     "build_hourly_intel_dag",
     "build_intel_digest_event_dag",
+    "build_intel_gdelt_pull_dag",
+    "build_intel_macro_pull_dag",
+    "build_intel_rss_pull_dag",
     "build_midday_pulse_dag",
     "build_ops_alert_event_dag",
     "build_weekly_eval_dag",

@@ -74,6 +74,11 @@ MATRIX: dict[str, CallerSpec] = {
     "secretary.chat": CallerSpec(default_tier="flash", escalate_when=_secretary_explain_deeply),
     "secretary.brief.morning": CallerSpec(default_tier="pro", escalate_when=_always),
     "secretary.brief.midday": CallerSpec(default_tier="flash"),
+    # P6.2 — secretary's natural-language planner. Pro on multi-step
+    # questions; flash on single-RPC questions.
+    "secretary.plan": CallerSpec(
+        default_tier="flash", escalate_when=_secretary_explain_deeply
+    ),
     "orchestrator.plan": CallerSpec(default_tier="pro", escalate_when=_always),
     # v2.5 N3.1 — Event-Triage Gate (LLM tie-break only when numeric scores
     # straddle the boundary). Flash by default; small token budget.

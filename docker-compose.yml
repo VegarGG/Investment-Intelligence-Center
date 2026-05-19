@@ -39,6 +39,12 @@ services:
     build:
       context: ./infra/postgres
       dockerfile: Dockerfile
+      args:
+        # P1.4 — pin the upstream image by digest in production. Set
+        # IIC_PG_BASE_IMAGE in .env to e.g.
+        #   timescale/timescaledb-ha@sha256:<digest>
+        # The default below is the floating tag (dev fallback only).
+        IIC_PG_BASE_IMAGE: ${IIC_PG_BASE_IMAGE:-timescale/timescaledb-ha:pg16}
     image: iic-postgres:pg16-partman
     container_name: iic-postgres
     environment:
@@ -146,11 +152,29 @@ services:
     mem_limit: 256m
     deploy: { resources: { limits: { memory: 256M } } }
 
+  # ----------------------------------------------------- iic-base
+  # P1.1 — single base image that contains every `packages/*` editable-installed.
+  # Builds first (depended-on by every agent below) so the agents inherit
+  # working internal imports without bind-mount workarounds.
+  iic_base:
+    image: iic-base:latest
+    build:
+      context: .
+      dockerfile: infra/iic-base/Dockerfile
+    container_name: iic-base
+    # The base image is a build artefact, not a long-running service. Exit
+    # immediately after entrypoint so health-aggregators don't wait on it.
+    command: ["python", "-c", "print('iic-base build complete')"]
+    restart: "no"
+    profiles: ["build-only"]
+
   # ----------------------------------------------------- orchestrator + agents
   orchestrator:
     <<: *iic-base
     build:
-      context: ./apps/orchestrator
+      context: .
+      dockerfile: apps/orchestrator/Dockerfile
+    image: iic-orchestrator:latest
     container_name: iic-orchestrator
     depends_on:
       postgres:
@@ -164,7 +188,8 @@ services:
 
   agent_intelligence:
     <<: *iic-base
-    build: { context: ./apps/agent_intelligence }
+    build: { context: ., dockerfile: apps/agent_intelligence/Dockerfile }
+    image: iic-agent-intelligence:latest
     container_name: iic-agent-intelligence
     depends_on: [nats, postgres]
     ports: ["8081:8081"]
@@ -173,7 +198,8 @@ services:
 
   agent_fundamental:
     <<: *iic-base
-    build: { context: ./apps/agent_fundamental }
+    build: { context: ., dockerfile: apps/agent_fundamental/Dockerfile }
+    image: iic-agent-fundamental:latest
     container_name: iic-agent-fundamental
     depends_on: [nats, postgres]
     ports: ["8082:8082"]
@@ -182,7 +208,8 @@ services:
 
   agent_quant:
     <<: *iic-base
-    build: { context: ./apps/agent_quant }
+    build: { context: ., dockerfile: apps/agent_quant/Dockerfile }
+    image: iic-agent-quant:latest
     container_name: iic-agent-quant
     depends_on: [nats, postgres]
     ports: ["8083:8083"]
@@ -191,7 +218,8 @@ services:
 
   agent_persona:
     <<: *iic-base
-    build: { context: ./apps/agent_persona }
+    build: { context: ., dockerfile: apps/agent_persona/Dockerfile }
+    image: iic-agent-persona:latest
     container_name: iic-agent-persona
     depends_on: [nats, postgres, chroma]
     ports: ["8084:8084"]
@@ -200,7 +228,8 @@ services:
 
   agent_backtest:
     <<: *iic-base
-    build: { context: ./apps/agent_backtest }
+    build: { context: ., dockerfile: apps/agent_backtest/Dockerfile }
+    image: iic-agent-backtest:latest
     container_name: iic-agent-backtest
     depends_on: [nats, postgres]
     ports: ["8085:8085"]
@@ -209,7 +238,8 @@ services:
 
   agent_secretary:
     <<: *iic-base
-    build: { context: ./apps/agent_secretary }
+    build: { context: ., dockerfile: apps/agent_secretary/Dockerfile }
+    image: iic-agent-secretary:latest
     container_name: iic-agent-secretary
     depends_on: [nats, postgres]
     ports: ["8086:8086"]
@@ -218,12 +248,14 @@ services:
 
   agent_futu:
     <<: *iic-base
-    build: { context: ./apps/agent_futu }
+    build: { context: ., dockerfile: apps/agent_futu/Dockerfile }
+    image: iic-agent-futu:latest
     container_name: iic-agent-futu
     depends_on: [nats, postgres]
     ports: ["8087:8087"]
     mem_limit: 512m
     deploy: { resources: { limits: { memory: 512M } } }
+    profiles: ["futu"]
     # B3.3a-only by default. Lighting up real OpenD requires the security
     # review in docs/security/FUTU_readonly_review.md (B3.3b).
     environment:
@@ -231,7 +263,8 @@ services:
 
   agent_board:
     <<: *iic-base
-    build: { context: ./apps/agent_board }
+    build: { context: ., dockerfile: apps/agent_board/Dockerfile }
+    image: iic-agent-board:latest
     container_name: iic-agent-board
     depends_on: [nats, postgres]
     ports: ["8088:8088"]
@@ -239,6 +272,23 @@ services:
     deploy: { resources: { limits: { memory: 512M } } }
     # v2.5 N3.3 / T2.4 — Investment Board. Behaviour is gated on the
     # `trading_room.investment_board.enabled` feature flag (default OFF).
+
+  admin_api:
+    <<: *iic-base
+    build: { context: ., dockerfile: apps/admin_api/Dockerfile }
+    image: iic-admin-api:latest
+    container_name: iic-admin-api
+    depends_on: [postgres]
+    ports: ["8090:8090"]
+    volumes:
+      - ./docs:/app/docs:ro
+      - ./infra:/app/infra
+      - ./packages/featureflags:/app/packages/featureflags
+      - ./secrets:/app/secrets
+    environment:
+      IIC_REPO_ROOT: /app
+    mem_limit: 512m
+    deploy: { resources: { limits: { memory: 512M } } }
 
   dashboard:
     <<: *iic-base

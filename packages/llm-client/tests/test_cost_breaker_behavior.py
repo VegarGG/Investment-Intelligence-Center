@@ -11,12 +11,26 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 
+import featureflags
+import featureflags.registry  # noqa: F401 — registers cost_breaker.enabled at import
 import pytest
 from llm_client import COST_SKIPPED_MARKER, ChatMessage, ChatResponse, LlmRouter
 from llm_client.cost_meter import CostMeter, InMemorySpendStore
 from llm_client.fallback import FallbackChain
 from llm_client.rate_limiter import RateLimiter
 from llm_client.router import synthetic_skip_response
+
+
+@pytest.fixture
+def _breaker_enabled():
+    """P0.2 — these tests pre-date the cost-breaker feature flag; they
+    expect the legacy synthetic-skip semantics, which now require the flag
+    to be flipped on."""
+    featureflags.set_for_test("cost_breaker.enabled", True)
+    try:
+        yield
+    finally:
+        featureflags.reset_for_test()
 
 
 class _StubAdapter:
@@ -72,7 +86,7 @@ async def test_synthetic_skip_response_shape():
 
 
 @pytest.mark.asyncio
-async def test_chat_or_skip_returns_real_response_when_under_cap():
+async def test_chat_or_skip_returns_real_response_when_under_cap(_breaker_enabled):
     router, _, adapter = _build_router(monthly_cap_usd=10.0)
     out = await router.chat_or_skip(
         "secretary.brief.morning",
@@ -84,7 +98,7 @@ async def test_chat_or_skip_returns_real_response_when_under_cap():
 
 
 @pytest.mark.asyncio
-async def test_chat_or_skip_returns_synthetic_when_breaker_open():
+async def test_chat_or_skip_returns_synthetic_when_breaker_open(_breaker_enabled):
     """Drive spend over the cap; chat_or_skip returns synthetic-skip."""
     router, meter, adapter = _build_router(monthly_cap_usd=0.01)
     # Pre-load the spend store past the cap.
@@ -101,7 +115,7 @@ async def test_chat_or_skip_returns_synthetic_when_breaker_open():
 
 
 @pytest.mark.asyncio
-async def test_chat_or_skip_drain_deadline_fires():
+async def test_chat_or_skip_drain_deadline_fires(_breaker_enabled):
     """If the in-flight call exceeds drain_deadline_s, return synthetic-skip."""
     router, _, adapter = _build_router(monthly_cap_usd=10.0, latency_s=0.5)
     out = await router.chat_or_skip(
@@ -113,6 +127,85 @@ async def test_chat_or_skip_drain_deadline_fires():
     assert "drain_deadline" in out.model
     # The adapter call did happen (it just timed out from the router's view).
     assert adapter.calls == 1
+
+
+# ---------------------------------------------------------------------------
+# P0.2 — cost_breaker.enabled=False (the new production default).
+# chat_or_skip must NOT return synthetic-skip; it must propagate failures
+# exactly like chat_or_raise so we surface real provider/cap errors.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_chat_or_skip_flag_off_passes_through_under_cap():
+    """With the breaker disabled (default), chat_or_skip returns the real
+    response and does not consult the cost meter."""
+    router, _, adapter = _build_router(monthly_cap_usd=10.0)
+    out = await router.chat_or_skip(
+        "secretary.brief.morning",
+        [ChatMessage(role="user", content="hi")],
+    )
+    assert out.cost_skipped is False
+    assert out.text == "ok"
+    assert adapter.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_chat_or_skip_flag_off_raises_on_breaker_open():
+    """With the flag off, exceeding the cap is *not* swallowed into a
+    synthetic-skip response; CostBudgetExceeded propagates."""
+    from llm_client.exceptions import CostBudgetExceeded
+
+    router, meter, adapter = _build_router(monthly_cap_usd=0.01)
+    today = date.today()
+    await meter.store.record(day=today, tier="flash", fallback=False, cost_usd=0.05)
+
+    with pytest.raises(CostBudgetExceeded):
+        await router.chat_or_skip(
+            "secretary.brief.morning",
+            [ChatMessage(role="user", content="hi")],
+        )
+    assert adapter.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_chat_or_raise_alias_calls_through():
+    router, _, adapter = _build_router(monthly_cap_usd=10.0)
+    out = await router.chat_or_raise(
+        "secretary.brief.morning",
+        [ChatMessage(role="user", content="hi")],
+    )
+    assert out.cost_skipped is False
+    assert out.text == "ok"
+    assert adapter.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_chat_or_raise_propagates_provider_failure():
+    """chat_or_raise must surface adapter exceptions verbatim, so callers
+    that wrap it can decide how to handle the failure."""
+    from llm_client.exceptions import ProviderError
+
+    class _Boom:
+        name = "stub"
+
+        async def chat(self, *a, **kw):
+            raise ProviderError("boom")
+
+        async def embed(self, *a, **kw):  # pragma: no cover
+            raise ProviderError("boom")
+
+    router = LlmRouter(
+        primary=_Boom(),
+        fallback=FallbackChain(pro_fallback=None, flash_fallback=None),
+        rate_limiter=RateLimiter(),
+        cost_meter=CostMeter(store=InMemorySpendStore(), monthly_cap_usd=10.0),
+    )
+    with pytest.raises(ProviderError):
+        await router.chat_or_raise(
+            "secretary.brief.morning",
+            [ChatMessage(role="user", content="hi")],
+        )
 
 
 @pytest.mark.asyncio

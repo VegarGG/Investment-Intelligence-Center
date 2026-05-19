@@ -1,0 +1,86 @@
+# Fresh-bringup smoke (P1.7).
+#
+# Daily run from a clean Ubuntu image. Catches the class of bug D6 §1
+# documented (init-roles, hypertable PK, missing pg_partman, etc.) the
+# moment they regress — instead of three months later when the next
+# fresh-bringup happens.
+#
+# This is intentionally a black-box test: clone, `make setup`, wait for
+# the smoke check, verify 13/13 services healthy. Anything green-by-luck
+# at PR time but red here is a real production-bringup regression.
+
+name: fresh-bringup
+
+on:
+  schedule:
+    - cron: "30 7 * * *"  # daily 07:30 UTC
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "deploy/**"
+      - "docker-compose*.yml"
+      - "infra/**"
+      - "packages/data-lake/data_lake/migrations/**"
+      - ".github/workflows/fresh-bringup.yml"
+
+jobs:
+  bringup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show docker info
+        run: |
+          docker version
+          docker compose version
+          uname -a
+          free -m
+          df -h
+
+      - name: Render minimal .env for CI
+        run: |
+          cp .env.example .env
+          # IIC_REPO_ROOT and matching test creds the smoke check expects.
+          {
+            echo "IIC_REPO_ROOT=$(pwd)"
+            echo "POSTGRES_USER=iic"
+            echo "POSTGRES_PASSWORD=ci-test-password"
+            echo "POSTGRES_DB=iic"
+            echo "MINIO_ROOT_USER=miniociuser"
+            echo "MINIO_ROOT_PASSWORD=miniocipassword"
+          } >> .env
+
+      - name: Build iic-base
+        run: docker build -f infra/iic-base/Dockerfile -t iic-base:latest .
+
+      - name: docker compose build
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml build
+
+      - name: docker compose up
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+      - name: Wait for healthy + run smoke check
+        run: |
+          set -euo pipefail
+          # Up to 5 minutes for substrate + 9 agents to settle.
+          for i in $(seq 1 60); do
+            unhealthy=$(docker ps --format '{{.Names}} {{.Status}}' | grep -E 'unhealthy|Restarting' || true)
+            if [ -z "$unhealthy" ]; then
+              echo "all containers healthy on attempt $i"
+              break
+            fi
+            echo "[$i] waiting on: $unhealthy"
+            sleep 5
+          done
+          bash deploy/smoke-check.sh
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          docker ps -a
+          for c in $(docker ps -a --format '{{.Names}}'); do
+            echo "===== $c ====="
+            docker logs --tail 200 "$c" || true
+          done

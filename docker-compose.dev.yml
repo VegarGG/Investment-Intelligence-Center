@@ -1,38 +1,27 @@
-# IIC v2.5 — DEV overlay.
+# IIC v2.5 — DEV overlay (post P1.3).
 #
 # Used in conjunction with docker-compose.yml:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 #
 # Differences from prod:
-#   - Mounts /srv/iic/featureflags into every agent so flags.yaml is editable
-#     on the host without rebuilding images.
 #   - Lowers some memory caps to fit on a developer laptop with 16 G RAM.
-#   - Disables the FUTU agent (it stays present but never starts) — FUTU
-#     Phase A is mock-only, Phase B is gated on Ziwei sign-off, neither is
-#     useful for first-run prototype testing.
+#   - Mounts the featureflags YAML so flags can be flipped without rebuild.
+#   - Mounts each agent's own source dir over /app/<agent_module> so code
+#     edits land without rebuilding the image.
 #   - Reduces grafana/loki/prometheus to "off by default" via profiles —
 #     the observability stack is heavy and not needed for first-run.
+#
+# P1.3: removed the per-`packages/*` bind-mounts and the
+# `dev-entrypoint.sh` wrapper. The iic-base image now contains every
+# internal package as an editable install, so imports work without
+# bind-mount workarounds.
 #
 # How to enable observability in dev:
 #   docker compose --profile observability \
 #     -f docker-compose.yml -f docker-compose.dev.yml up -d
 
-# Each agent's Dockerfile only COPYs its own source dir, but the agents
-# import shared packages (`schema`, `featureflags`, `llm_client`,
-# `data_bus`, `notifier`, `prompts`, `data_lake`). In dev we bind-mount
-# each shared package over /app/<pkg> AND the agent's own source over
-# /app/<agent_module> (so code edits don't require image rebuilds). A
-# tiny entrypoint wrapper pip-installs the transitive runtime deps the
-# per-agent requirements.txt files don't list.
-#
-# Volume lists are inlined per service: YAML anchors are lists and Docker
-# Compose can't deep-merge anchored lists with extra siblings.
-
 x-iic-pkg-env: &iic-pkg-env
   IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
-
-x-iic-dev-entrypoint: &iic-dev-entrypoint
-  ["/usr/local/bin/iic-dev-entrypoint"]
 
 services:
   # ---- substrate: shrink memory caps to fit on 16 G dev laptops ------------
@@ -50,144 +39,74 @@ services:
         limits:
           memory: 2G
 
-  # ---- agents + orchestrator: mount shared packages + flags YAML ----------
-  # NOTE: Compose overrides `entrypoint:` AND clears the image's CMD, so
-  # each service must also specify its own `command:` (matching the CMD in
-  # the agent's Dockerfile).
+  # ---- agents + orchestrator -----------------------------------------------
+  # Each service mounts:
+  #   - /srv/iic/featureflags/flags.yaml as the canonical flag store
+  #   - the host's `packages/*` checkout, so the editable installs see
+  #     live changes to internal packages without rebuilding iic-base
+  #   - the agent's own source over /app/<agent_module>
   orchestrator:
-    entrypoint: *iic-dev-entrypoint
-    command: ["uvicorn", "orchestrator.app:app", "--host", "0.0.0.0", "--port", "8080"]
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
-      # Orchestrator's own source — bind-mount so code edits land without
-      # rebuilding the image. The Dockerfile already COPY'd these dirs, so
-      # the mount overlays them with the live source.
+      - ./packages:/app/packages:ro
       - ./apps/orchestrator/orchestrator:/app/orchestrator:ro
-      # Orchestrator reads docs/prompts/persona/*.yaml as the persona SoT.
       - ./docs/prompts/persona:/app/docs/prompts/persona:ro
     environment:
       IIC_FEATUREFLAGS_PATH: /srv/iic/featureflags/flags.yaml
+      IIC_REPO_ROOT: /app
       IIC_PERSONA_DIR: /app/docs/prompts/persona
 
   agent_intelligence:
-    entrypoint: *iic-dev-entrypoint
-    command: ["uvicorn", "intel.main:app", "--host", "0.0.0.0", "--port", "8081"]
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
+      - ./packages:/app/packages:ro
       - ./apps/agent_intelligence/intel:/app/intel:ro
     environment:
       <<: *iic-pkg-env
       INTEL_AUTOSTART: "0"
 
   agent_fundamental:
-    entrypoint: *iic-dev-entrypoint
-    command: ["uvicorn", "fund.main:app", "--host", "0.0.0.0", "--port", "8082"]
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
+      - ./packages:/app/packages:ro
       - ./apps/agent_fundamental/fund:/app/fund:ro
     environment: *iic-pkg-env
 
   agent_quant:
-    entrypoint: *iic-dev-entrypoint
-    command: ["uvicorn", "quant.main:app", "--host", "0.0.0.0", "--port", "8083"]
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
+      - ./packages:/app/packages:ro
       - ./apps/agent_quant/quant:/app/quant:ro
     environment: *iic-pkg-env
 
   agent_persona:
-    entrypoint: *iic-dev-entrypoint
-    command: ["uvicorn", "persona.main:app", "--host", "0.0.0.0", "--port", "8084"]
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
+      - ./packages:/app/packages:ro
       - ./apps/agent_persona/persona:/app/persona:ro
-    environment: *iic-pkg-env
+      - ./docs/prompts/persona:/app/docs/prompts/persona:ro
+    environment:
+      <<: *iic-pkg-env
+      IIC_REPO_ROOT: /app
 
   agent_backtest:
-    entrypoint: *iic-dev-entrypoint
-    command: ["uvicorn", "backtest.main:app", "--host", "0.0.0.0", "--port", "8085"]
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
+      - ./packages:/app/packages:ro
       - ./apps/agent_backtest/backtest:/app/backtest:ro
     environment: *iic-pkg-env
 
   agent_secretary:
-    entrypoint: *iic-dev-entrypoint
-    command: ["uvicorn", "secretary.main:app", "--host", "0.0.0.0", "--port", "8086"]
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
+      - ./packages:/app/packages:ro
       - ./apps/agent_secretary/secretary:/app/secretary:ro
     environment: *iic-pkg-env
 
   agent_board:
-    entrypoint: *iic-dev-entrypoint
-    command: ["uvicorn", "board.main:app", "--host", "0.0.0.0", "--port", "8088"]
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
+      - ./packages:/app/packages:ro
       - ./apps/agent_board/board:/app/board:ro
     environment: *iic-pkg-env
 
@@ -197,17 +116,9 @@ services:
   # prototype testing we keep the container off entirely.
   agent_futu:
     profiles: ["futu"]   # not in the default profile → docker compose up skips it
-    entrypoint: *iic-dev-entrypoint
     volumes:
       - /srv/iic/featureflags:/srv/iic/featureflags:ro
-      - ./packages/featureflags/featureflags:/app/featureflags:ro
-      - ./packages/schema/schema:/app/schema:ro
-      - ./packages/llm-client/llm_client:/app/llm_client:ro
-      - ./packages/data-bus/data_bus:/app/data_bus:ro
-      - ./packages/notifier/notifier:/app/notifier:ro
-      - ./packages/prompts/prompts:/app/prompts:ro
-      - ./packages/data-lake/data_lake:/app/data_lake:ro
-      - ./deploy/dev-entrypoint.sh:/usr/local/bin/iic-dev-entrypoint:ro
+      - ./packages:/app/packages:ro
       - ./apps/agent_futu/futu:/app/futu:ro
     environment: *iic-pkg-env
 

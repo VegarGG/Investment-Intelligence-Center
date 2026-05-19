@@ -61,9 +61,111 @@ class IntelConfig:
 
         srcs: list[SourceCfg] = []
         sources_path = os.environ.get("INTEL_SOURCES_PATH")
+        if not sources_path and os.environ.get("INTEL_AUTOSTART", "0") == "1":
+            # P2.1 — autostart mode (production) auto-discovers the
+            # default sources.yaml so the pipeline is never bound to an
+            # empty source list at boot. Tests that import the factory
+            # do not set INTEL_AUTOSTART, so the discovery is opt-in.
+            for candidate in (
+                Path("/app/sources.yaml"),
+                Path("apps/agent_intelligence/sources.yaml"),
+            ):
+                if candidate.exists():
+                    sources_path = str(candidate)
+                    break
         if sources_path and Path(sources_path).exists():
             srcs = sources_mod.load_sources(sources_path)
-        return cls(sources=srcs)
+
+        crawler = _build_crawler_from_env()
+        hash_store = _build_hash_store_from_env()
+        semantic_index = _build_semantic_index_from_env()
+        macro = _build_macro_source_from_env()
+        event_store = _build_event_store_from_env()
+        return cls(
+            sources=srcs,
+            crawler=crawler,
+            hash_store=hash_store,
+            semantic_index=semantic_index,
+            macro=macro,
+            event_store=event_store,
+        )
+
+
+def _build_crawler_from_env() -> CrawlerProtocol | None:
+    backend = os.environ.get("INTEL_CRAWLER_BACKEND", "").lower()
+    if backend in ("rss", "live"):
+        from .crawler.rss import RSSCrawler
+
+        return RSSCrawler()
+    if backend == "gdelt":
+        from .crawler.gdelt import GdeltCrawler
+
+        return GdeltCrawler()
+    if backend == "rss+gdelt":
+        # The pipeline iterates over `sources` and dispatches by id prefix.
+        # The composite crawler routes "gdelt" sources to GdeltCrawler and
+        # the rest to RSSCrawler.
+        from .crawler.gdelt import GdeltCrawler
+        from .crawler.rss import RSSCrawler
+
+        return _CompositeCrawler(rss=RSSCrawler(), gdelt=GdeltCrawler())
+    return None
+
+
+class _CompositeCrawler:
+    """Multiplex RSS + GDELT by source.id prefix.
+
+    The pipeline calls ``fetch(source)`` once per source; we pick the
+    crawler by ``source.id`` to keep both data streams in one pipeline
+    pass.
+    """
+
+    __slots__ = ("_rss", "_gdelt")
+
+    def __init__(self, *, rss, gdelt) -> None:
+        self._rss = rss
+        self._gdelt = gdelt
+
+    def fetch(self, source):
+        if source.id.startswith("gdelt"):
+            return self._gdelt.fetch(source)
+        return self._rss.fetch(source)
+
+
+def _build_hash_store_from_env() -> HashStore | None:
+    backend = os.environ.get("INTEL_HASH_STORE_BACKEND", "").lower()
+    if backend == "redis":
+        from .dedupe.redis_hash_gate import RedisHashStore
+
+        return RedisHashStore.from_env()
+    return None
+
+
+def _build_semantic_index_from_env() -> SemanticIndex | None:
+    backend = os.environ.get("INTEL_SEMANTIC_INDEX_BACKEND", "").lower()
+    if backend == "pgvector":
+        from .dedupe.pgvector_index import PgvectorSemanticIndex
+
+        return PgvectorSemanticIndex.from_env()
+    return None
+
+
+def _build_macro_source_from_env() -> MacroSource | None:
+    backend = os.environ.get("INTEL_MACRO_BACKEND", "").lower()
+    if backend == "fred":
+        from .macro.fred import FredMacroSource
+
+        return FredMacroSource.from_env()
+    return None
+
+
+def _build_event_store_from_env() -> EventStore | None:
+    backend = os.environ.get("INTEL_EVENT_STORE_BACKEND", "").lower()
+    if backend == "postgres":
+        from .persistence import PostgresEventStore
+
+        return PostgresEventStore.from_env()
+    return None
 
 
 def build_pipeline(
@@ -105,9 +207,21 @@ def build_pipeline(
 
 
 async def _default_embed(text: str) -> list[float]:
-    """Cheap deterministic embedding for the in-memory smoke path.
+    """Embedding function for the semantic dedupe gate (P2.4).
 
-    Production replaces this with the LLM router's `embed()` call when the
-    real semantic index is wired.
+    Resolution order:
+    1. ``INTEL_EMBED_BACKEND=llm`` → route through the LLM router's
+       ``embed("intel.dedupe.embed", [text])`` and return the first
+       vector. Production path.
+    2. Anything else → cheap deterministic ``hash_embed(text)``. Keeps
+       the in-memory smoke path and unit tests fast / hermetic.
     """
+    backend = os.environ.get("INTEL_EMBED_BACKEND", "").lower()
+    if backend == "llm":
+        from llm_client.router import embed as router_embed
+
+        resp = await router_embed("intel.dedupe.embed", [text])
+        if not resp.vectors:
+            raise RuntimeError("intel.dedupe.embed returned no vectors")
+        return list(resp.vectors[0])
     return hash_embed(text)

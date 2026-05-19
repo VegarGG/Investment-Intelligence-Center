@@ -114,7 +114,9 @@ def test_no_non_test_code_imports_forbidden_methods():
 
     This is the bandit/mypy-style guard the plan §T2.7 requires.
     """
-    repo_root = Path(__file__).resolve().parents[3]
+    from featureflags.paths import repo_root as _repo_root
+
+    repo_root = _repo_root()
     scan_paths = (
         repo_root / "apps",
         repo_root / "packages",

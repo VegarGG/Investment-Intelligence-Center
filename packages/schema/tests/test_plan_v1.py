@@ -258,7 +258,9 @@ def test_entry_price_negative_fails():
 
 
 # --------------------------------------------------------------- goldens
-GOLDENS_PATH = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plan_v1_examples.json"
+from featureflags.paths import repo_root as _repo_root  # noqa: E402
+
+GOLDENS_PATH = _repo_root() / "tests" / "fixtures" / "plan_v1_examples.json"
 
 
 def test_goldens_set_loads_and_validates():

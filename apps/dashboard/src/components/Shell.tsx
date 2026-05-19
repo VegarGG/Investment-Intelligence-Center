@@ -13,11 +13,13 @@ const NAV: { to: string; label: string }[] = [
   { to: "/leaderboard", label: "Leaderboard" },
   { to: "/tape", label: "Trade Tape" },
   { to: "/intel", label: "Intel" },
+  { to: "/map", label: "Map" },
   { to: "/quant", label: "Quant" },
   { to: "/fundamental", label: "Fundamental" },
   { to: "/personas", label: "Personas" },
   { to: "/chat", label: "Chat" },
   { to: "/health", label: "Health" },
+  { to: "/admin/connectors", label: "Settings" },
 ];
 
 export function Shell({ children }: { children: ReactNode }) {

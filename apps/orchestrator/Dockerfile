@@ -1,20 +1,12 @@
-FROM python:3.12-slim AS base
+# Orchestrator agent (workflow 32 / v2.5 T1). Built on iic-base which carries
+# the internal `packages/*` editable-installs (P1.2).
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+FROM iic-base:latest
 
-WORKDIR /app
+COPY apps/orchestrator/requirements.txt /app/orchestrator/requirements.txt
+RUN pip install --no-cache-dir -r /app/orchestrator/requirements.txt
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt ./
-RUN pip install -r requirements.txt
-
-COPY orchestrator/ ./orchestrator/
+COPY apps/orchestrator/orchestrator/ /app/orchestrator/
 
 EXPOSE 8080
 

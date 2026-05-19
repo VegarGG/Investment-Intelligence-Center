@@ -1,0 +1,27 @@
+# Macro series the intel agent pulls (P2.8).
+# Override per-deployment by editing this file or via IIC_MACRO_SERIES.
+
+fred:
+  # Inflation
+  - CPIAUCSL                # CPI All Urban Consumers SA
+  - CORESTICKM159SFRBATL    # Sticky-price CPI core
+  - PCEPI                   # PCE price index
+  # Labour
+  - PAYEMS                  # Nonfarm payrolls
+  - UNRATE                  # Unemployment rate
+  - CIVPART                 # Labor force participation
+  # Sentiment / activity
+  - UMCSENT                 # U-Mich consumer sentiment
+  - INDPRO                  # Industrial production
+  - RSAFS                   # Retail and food services sales
+  # Rates / curve
+  - GS10                    # 10y treasury constant maturity
+  - GS2                     # 2y treasury constant maturity
+  - DFEDTARU                # Fed funds target upper
+  # Money / credit
+  - M2SL                    # M2 money stock
+  - BAMLH0A0HYM2            # ICE BofA HY OAS
+  # FX
+  - DTWEXBGS                # Trade-weighted USD broad
+  # Housing
+  - HOUST                   # Housing starts

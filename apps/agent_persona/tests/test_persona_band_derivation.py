@@ -7,13 +7,12 @@ retail_degen modulate by `macro_regime`; Buffett / Wood / Burry don't.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
+from featureflags.paths import persona_dir
 from persona.loader import load_dir
 from persona.reasoner import _bands_from_priors
 
-YAML_DIR = Path(__file__).resolve().parents[3] / "docs" / "prompts" / "persona"
+YAML_DIR = persona_dir()
 SPECS = load_dir(YAML_DIR)
 
 

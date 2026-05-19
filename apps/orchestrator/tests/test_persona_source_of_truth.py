@@ -9,14 +9,14 @@ to make persona-list drift impossible to merge.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
 
+from featureflags.paths import persona_dir, repo_root
 from orchestrator.plan.personas import list_persona_slugs
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-PERSONA_DIR = REPO_ROOT / "docs" / "prompts" / "persona"
+REPO_ROOT = repo_root()
+PERSONA_DIR = persona_dir()
 
 # Pattern: things that *look like* persona slug references in code or
 # string literals. We intentionally only flag the orchestrator + agent

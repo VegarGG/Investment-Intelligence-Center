@@ -8,12 +8,13 @@ desynchronise the slug list, the URL map, and the YAML directory.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 import yaml
+from featureflags.paths import persona_dir
+
 
 @dataclass(frozen=True, slots=True)
 class PersonaSpec:
@@ -21,34 +22,13 @@ class PersonaSpec:
     display_name: str
 
 
-def _default_dir() -> Path:
-    """Compute the default persona-yaml dir lazily.
-
-    In the source tree the file lives at
-    ``<repo>/apps/orchestrator/orchestrator/plan/personas.py`` so
-    ``parents[4]`` is the repo root. In a container where the source is
-    mounted at ``/app/orchestrator/...`` the path is shorter; doing the
-    arithmetic at import time crashes. Make it lazy and let
-    ``IIC_PERSONA_DIR`` override in deployments where the layout differs.
-    """
-    parents = Path(__file__).resolve().parents
-    if len(parents) >= 5:
-        return parents[4] / "docs" / "prompts" / "persona"
-    # Fallback for container layouts: assume docs/ sits next to the
-    # outermost dir on sys.path, e.g. /app/docs/prompts/persona.
-    return Path("/app") / "docs" / "prompts" / "persona"
-
-
-# Kept as a lazily-initialised property so import never crashes when
-# parents[4] is unreachable. Use _resolve_dir() at call sites.
-DEFAULT_DIR = _default_dir() if len(Path(__file__).resolve().parents) >= 5 else None  # type: ignore[assignment]
+# Computed on demand via featureflags.paths.persona_dir(); honours
+# IIC_PERSONA_DIR override and falls back to <IIC_REPO_ROOT>/docs/prompts/persona.
+DEFAULT_DIR: Path | None = None
 
 
 def _resolve_dir() -> Path:
-    raw = os.environ.get("IIC_PERSONA_DIR")
-    if raw:
-        return Path(raw)
-    return _default_dir()
+    return persona_dir()
 
 
 def list_personas(force_reload: bool = False) -> list[PersonaSpec]:

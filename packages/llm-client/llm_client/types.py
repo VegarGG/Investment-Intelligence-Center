@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 LlmTier = Literal["flash", "pro", "embed"]
-Outcome = Literal["ok", "error", "timeout", "rate_limit"]
+Outcome = Literal["ok", "error", "timeout", "rate_limit", "skipped"]
 
 
 class ChatMessage(BaseModel):

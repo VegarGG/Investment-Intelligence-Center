@@ -6,10 +6,13 @@
 # `lake.events` table. The PGDG apt repo on Ubuntu 22.04 ships a matching
 # `postgresql-16-partman` package, so we just install it on top.
 #
-# Pinning is by major version (16 + 5) to keep the build reproducible while
-# letting security patches roll in.
+# P1.4 — Pin by build-arg. Ops sets `IIC_PG_BASE_IMAGE=timescale/...@sha256:<digest>`
+# in `.env` or via `--build-arg`; the floating tag is only the dev fallback.
+# Two prior outages in D6 traced to silent upstream re-tags; never run a
+# floating tag in prod.
 
-FROM timescale/timescaledb-ha:pg16
+ARG IIC_PG_BASE_IMAGE=timescale/timescaledb-ha:pg16
+FROM ${IIC_PG_BASE_IMAGE}
 
 USER root
 

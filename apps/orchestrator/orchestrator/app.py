@@ -101,6 +101,9 @@ def register_default_dags(client: Any) -> None:
         build_evening_recap_dag,
         build_hourly_intel_dag,
         build_intel_digest_event_dag,
+        build_intel_gdelt_pull_dag,
+        build_intel_macro_pull_dag,
+        build_intel_rss_pull_dag,
         build_midday_pulse_dag,
         build_ops_alert_event_dag,
         build_weekly_eval_dag,
@@ -152,6 +155,17 @@ def register_default_dags(client: Any) -> None:
     register("cron:weekly_eval", weekly)
     register("http:weekly_eval", weekly)
 
+    # P2.9 — fine-grained intel pulls
+    rss_pull = _make_simple_runner(build_intel_rss_pull_dag)
+    gdelt_pull = _make_simple_runner(build_intel_gdelt_pull_dag)
+    macro_pull = _make_simple_runner(build_intel_macro_pull_dag)
+    register("cron:intel_rss_pull", rss_pull)
+    register("http:intel_rss_pull", rss_pull)
+    register("cron:intel_gdelt_pull", gdelt_pull)
+    register("http:intel_gdelt_pull", gdelt_pull)
+    register("cron:intel_macro_pull", macro_pull)
+    register("http:intel_macro_pull", macro_pull)
+
     # v2.5 T1.5 — close the silent-drop surface for NATS subjects.
     intel_event = _make_simple_runner(build_intel_digest_event_dag)
     fill_event = _make_simple_runner(build_backtest_fill_event_dag)
@@ -159,6 +173,31 @@ def register_default_dags(client: Any) -> None:
     register("event:intel.digest.v1", intel_event)
     register("event:backtest.fill.v1", fill_event)
     register("event:ops.alert.v1", ops_event)
+
+    # P2.11 — wake the trading-room DAG on intel.event.high_impact.v1.
+    # The trading_room DAG itself owns the triage gate + fan-out + board.
+    from .plan.trading_room import build_trading_room_dag, make_initial_state as _tr_initial
+
+    async def _trading_room_event(ctx: dict[str, Any]) -> DagResult[Any]:
+        global _last_completed
+        graph = build_trading_room_dag(client)
+        state = _tr_initial(
+            trigger_event=ctx.get("payload") or {},
+            trace_id=ctx["trace_id"],
+        )
+        result = await execute(
+            graph,
+            state,
+            trace_id=state.trace_id,
+            sla_runner=with_sla_timeout,
+        )
+        _last_completed = result
+        return result
+
+    register("event:intel.event.high_impact.v1", _trading_room_event)
+    # P5.5 — geo clusters route through the same trading-room DAG; the
+    # triage gate treats them as high-impact context.
+    register("event:intel.event.geo_cluster.v1", _trading_room_event)
 
 
 # ---- HTTP endpoints --------------------------------------------------------

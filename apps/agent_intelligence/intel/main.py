@@ -119,3 +119,142 @@ async def run_synthesize() -> dict[str, Any]:
         "dropped_hash": result.dropped_hash,
         "dropped_semantic": result.dropped_semantic,
     }
+
+
+@app.post("/run/pull")
+async def run_pull(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """P2.9 — partial pull from a single source class (rss / gdelt / macro).
+
+    The orchestrator's `intel_rss_pull` / `intel_gdelt_pull` /
+    `intel_macro_pull` cron DAGs call this so the heartbeat pulls don't
+    drag the whole synth pipeline. Implemented as a thin shim over
+    `pipeline.run()` today; will split into per-source iterators when
+    rate-limit budgets diverge enough to matter (see plan §6.2).
+    """
+    pipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="pipeline not configured")
+
+    source = (payload or {}).get("source") or "rss"
+    result = await pipeline.run()
+    accepted_ids = [getattr(e, "id", str(i)) for i, e in enumerate(result.accepted_events)]
+    response: dict[str, Any] = {
+        "status": "ok",
+        "source": source,
+        "accepted_event_ids": accepted_ids,
+        "events": len(result.accepted_events),
+        "dropped_hash": result.dropped_hash,
+        "dropped_semantic": result.dropped_semantic,
+    }
+    if source == "macro":
+        # Macro pulls don't go through dedupe, surface the series list.
+        macro = getattr(pipeline, "macro", None)
+        try:
+            from datetime import UTC, datetime
+
+            releases = await macro.fetch(datetime.now(UTC)) if macro else []
+        except Exception as exc:  # noqa: BLE001 — heartbeat must not error
+            log.warning("macro pull failed: %s", exc)
+            releases = []
+        response["series"] = [r.series for r in releases]
+    return response
+
+
+@app.get("/api/geo/events")
+async def geo_events(window: str = "24h", themes: str | None = None) -> dict[str, Any]:
+    """P5.4 — windowed geo-events query for the map dashboard.
+
+    ``window`` accepts ``Nh`` / ``Nm`` / ``Nd`` (e.g. ``24h``). ``themes``
+    is a comma-separated allow-list (e.g. ``ECON,TAX``); matching uses
+    ``LIKE ':theme%'``. Result is paginated via simple ``LIMIT 10000``
+    so the JSON response stays under ~10 MB on the wire.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    seconds = _parse_window(window)
+    since = datetime.now(UTC) - timedelta(seconds=seconds)
+    theme_filters = [t.strip() for t in (themes or "").split(",") if t.strip()]
+
+    sm = _state.get("geo_sessionmaker")
+    if sm is None:
+        # Allow the dashboard to render an empty map in dev installs.
+        return {"window": window, "since": since.isoformat(), "events": []}
+    from sqlalchemy import text
+
+    sql_base = (
+        "SELECT event_id::text AS event_id, ts, lat, lon, theme, tone, "
+        "src_url, place "
+        "FROM lake.geo_events "
+        "WHERE ts >= :since "
+    )
+    params: dict[str, Any] = {"since": since}
+    if theme_filters:
+        sql_base += "AND (" + " OR ".join(
+            f"theme LIKE :t{i} || '%'" for i in range(len(theme_filters))
+        ) + ") "
+        for i, t in enumerate(theme_filters):
+            params[f"t{i}"] = t
+    sql_base += "ORDER BY ts DESC LIMIT 10000"
+
+    async with sm() as session:  # type: ignore[operator]
+        res = await session.execute(text(sql_base), params)
+        rows = res.all()
+    return {
+        "window": window,
+        "since": since.isoformat(),
+        "themes": theme_filters,
+        "events": [
+            {
+                "event_id": r.event_id,
+                "ts": r.ts.isoformat(),
+                "lat": r.lat,
+                "lon": r.lon,
+                "theme": r.theme,
+                "tone": r.tone,
+                "src_url": r.src_url,
+                "place": r.place,
+            }
+            for r in rows
+        ],
+    }
+
+
+def _parse_window(window: str) -> int:
+    if not window:
+        return 24 * 3600
+    unit = window[-1].lower()
+    try:
+        n = int(window[:-1])
+    except ValueError:
+        return 24 * 3600
+    if unit == "h":
+        return n * 3600
+    if unit == "m":
+        return n * 60
+    if unit == "d":
+        return n * 86400
+    return 24 * 3600
+
+
+@app.post("/run/context")
+async def run_context(payload: dict[str, Any]) -> dict[str, Any]:
+    """P2.7 — return an ``intel.context.v1`` for a single ticker."""
+    from .context import build_context, from_events
+
+    ticker = (payload or {}).get("ticker")
+    if not ticker:
+        raise HTTPException(status_code=400, detail="missing 'ticker'")
+    window_hours = int((payload or {}).get("window_hours", 24))
+    pipeline = _state.get("pipeline")
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="pipeline not configured")
+    # The list-event-store path is the canonical context source in
+    # in-memory test mode; production switches to a Postgres-backed query.
+    store = getattr(pipeline, "event_store", None)
+    events = list(getattr(store, "rows", {}).values()) if store else []
+    ctx = await build_context(
+        ticker,
+        query=from_events(events),
+        window_hours=window_hours,
+    )
+    return ctx.model_dump(by_alias=True, mode="json")

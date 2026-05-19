@@ -1,20 +1,14 @@
-FROM python:3.12-slim AS base
+# Persona agent. Built on iic-base (P1.2). Build context: repo root.
+# The persona YAML specs live under docs/prompts/persona; mount or copy
+# them under $IIC_REPO_ROOT/docs/prompts/persona at runtime.
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+FROM iic-base:latest
 
-WORKDIR /app
+COPY apps/agent_persona/requirements.txt /app/agent_persona/requirements.txt
+RUN pip install --no-cache-dir -r /app/agent_persona/requirements.txt
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt ./
-RUN pip install -r requirements.txt
-
-COPY persona/ ./persona/
+COPY apps/agent_persona/persona/ /app/persona/
+COPY docs/prompts/persona/ /app/docs/prompts/persona/
 
 EXPOSE 8084
 

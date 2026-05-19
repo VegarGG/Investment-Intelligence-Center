@@ -1,17 +1,24 @@
 """Cost meter + circuit breaker (workflow 03 §7).
 
-Two budgets: primary (LLM_MONTHLY_CAP_USD, default $90) and fallback
-(LLM_FALLBACK_CAP_USD, default $20). The fallback budget governs spend
-that occurs while DeepSeek is down and we're routing to Anthropic/Groq —
-which is ~5x more expensive at the Pro tier.
+Two budgets: primary (LLM_MONTHLY_CAP_USD) and fallback
+(LLM_FALLBACK_CAP_USD). The fallback budget governs spend that occurs
+while DeepSeek is down and we're routing to Anthropic/Groq — which is
+~5x more expensive at the Pro tier.
 
 State machine: CLOSED → OPEN (cap exceeded) → HALF_OPEN after cooldown.
 While OPEN, allow() returns False; the router translates that into
 CostBudgetExceeded which the secretary surfaces to the user via WeCom.
+
+P0 default posture: ``DEFAULT_MONTHLY_CAP_USD = inf`` and the
+``cost_breaker.enabled`` feature flag defaults to ``False``. Both gates
+are off until we have a week of real ``lake.llm_calls`` data to calibrate
+against. Override via env (``LLM_MONTHLY_CAP_USD=…``) once we want
+budgeting back.
 """
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -20,8 +27,21 @@ from typing import Protocol
 
 from llm_client.types import ChatResponse, LlmTier
 
-DEFAULT_MONTHLY_CAP_USD = 90.0
-DEFAULT_FALLBACK_CAP_USD = 20.0
+
+def _env_cap(name: str, fallback: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return fallback
+    try:
+        return float(raw)
+    except ValueError:
+        return fallback
+
+
+# P0.3 — defaults are unbounded so a fresh install does not silently gate
+# every call. Tighten via env once `lake.llm_calls` has real spend data.
+DEFAULT_MONTHLY_CAP_USD: float = _env_cap("LLM_MONTHLY_CAP_USD", float("inf"))
+DEFAULT_FALLBACK_CAP_USD: float = _env_cap("LLM_FALLBACK_CAP_USD", float("inf"))
 DEFAULT_SOFT_FRACTION = 0.8
 COOLDOWN_SECONDS = 60 * 60  # 1 hour
 

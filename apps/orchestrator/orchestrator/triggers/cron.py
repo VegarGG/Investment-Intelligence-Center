@@ -22,12 +22,25 @@ log = logging.getLogger(__name__)
 
 DEFAULT_TZ = "America/Los_Angeles"
 
-# Workflow 06 §2.1 cron schedule.
+# Workflow 06 §2.1 cron schedule (expanded by P2.9).
+#
+# Cadence rationale per source (D7 §6.2):
+#   - intel_rss_pull       — every 5 minutes (balance freshness vs polite)
+#   - intel_gdelt_pull     — every 15 minutes (matches GDELT release cycle)
+#   - intel_macro_pull     — hourly, during US/EU business window 6-22 PT
+#   - morning_brief        — 06:30 PT, after first intel pulls
+#   - midday_check         — 12:00 PT
+#   - evening_recap        — 16:30 PT (post-US-close)
+#   - weekly_eval          — Mondays 09:00 PT
 CRON_JOBS: tuple[tuple[str, dict[str, Any]], ...] = (
+    # Intel pulls (P2.9).
+    ("cron:intel_rss_pull", {"minute": "*/5"}),
+    ("cron:intel_gdelt_pull", {"minute": "*/15"}),
+    ("cron:intel_macro_pull", {"hour": "6-22", "minute": 0}),
+    # Briefs + recap.
     ("cron:morning_brief", {"hour": 6, "minute": 30}),
     ("cron:midday_check", {"hour": 12, "minute": 0}),
     ("cron:evening_recap", {"hour": 16, "minute": 30}),
-    ("cron:hourly_intel", {"hour": "6-22", "minute": 0}),
     ("cron:weekly_eval", {"day_of_week": "mon", "hour": 9, "minute": 0}),
 )
 

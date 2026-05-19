@@ -48,14 +48,69 @@ async def health() -> dict[str, Any]:
     }
 
 
+async def _run_cadence(cadence: str, override: dict[str, Any] | None = None) -> dict[str, Any]:
+    """P8.1 / P8.2 — drive the real reasoner with persona spec + intel digest.
+
+    The reasoner needs a live ``IntelDigestV1`` + a ``MemoryStore``.
+    For dev installs without those bound we surface a friendly stub
+    response; production wires them via app state at boot.
+    """
+    spec = _state.get("spec")
+    if spec is None:
+        return {
+            "status": "no_spec",
+            "slug": SLUG,
+            "cadence": cadence,
+            "detail": f"no YAML found for slug {SLUG!r}",
+        }
+    digest = _state.get("digest")
+    memory = _state.get("memory")
+    if digest is None or memory is None:
+        return {
+            "status": "no_inputs",
+            "slug": SLUG,
+            "cadence": cadence,
+            "detail": "persona digest + memory not yet bound; reasoner skipped",
+        }
+    from .reasoner import reason
+
+    advice = await reason(
+        spec,
+        digest,
+        memory=memory,
+        cadence=cadence,  # type: ignore[arg-type]
+    )
+    if advice is None:
+        return {"status": "no_advice", "slug": SLUG, "cadence": cadence}
+    _state["advices_24h"] += 1
+    return {
+        "status": "ok",
+        "slug": SLUG,
+        "cadence": cadence,
+        "advice_id": advice.id,
+        "agent": advice.agent,
+        "tickers": [a.ticker for a in advice.assets],
+    }
+
+
 @app.post("/run/daily")
 async def run_daily() -> dict[str, Any]:
-    return {"status": "queued", "slug": SLUG, "cadence": "daily"}
+    return await _run_cadence("daily")
 
 
 @app.post("/run/weekly")
 async def run_weekly() -> dict[str, Any]:
-    return {"status": "queued", "slug": SLUG, "cadence": "weekly"}
+    return await _run_cadence("weekly")
+
+
+@app.post("/run/rerun")
+async def run_rerun(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """P8.4 — replay daily/weekly with caller-supplied overrides."""
+    body = payload or {}
+    cadence = str(body.get("cadence", "daily"))
+    if cadence not in ("daily", "weekly"):
+        return {"status": "error", "detail": f"unknown cadence {cadence!r}"}
+    return await _run_cadence(cadence, override=body)
 
 
 @app.post("/team_plan")

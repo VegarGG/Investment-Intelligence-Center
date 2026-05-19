@@ -18,6 +18,10 @@ log = logging.getLogger(__name__)
 
 ORCH_SUBSCRIPTIONS = (
     ("intel.digest.v1", "orchestrator.intel_digest"),
+    # P2.11 — wake the trading room / event-triage gate on high-impact events.
+    ("intel.event.high_impact.v1", "orchestrator.intel_high_impact"),
+    # P5.5 — treat geo cluster crossings as high-impact events for routing.
+    ("intel.event.geo_cluster.v1", "orchestrator.intel_geo_cluster"),
     ("backtest.fill.v1", "orchestrator.backtest_fill"),
     ("ops.alert.v1", "orchestrator.ops_alert"),
 )

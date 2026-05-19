@@ -1,0 +1,72 @@
+# Static checks (P1.5).
+#
+# Runs:
+#   1. shellcheck across deploy/*.sh — catches the `tr -c` newline class of bug.
+#   2. hadolint across every Dockerfile under infra/ and apps/.
+#   3. A custom alembic-hypertable lint that imports each migration in
+#      packages/data-lake/data_lake/migrations/versions and refuses any
+#      table later passed to `create_hypertable` whose primary key omits
+#      the partitioning column.
+#   4. A custom `parents[N]` static check (P1.6) that fails CI if any
+#      production source file under apps/ or packages/ counts parents
+#      to derive a repo-root-relative path; rooted on IIC_REPO_ROOT now.
+name: static-checks
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck deploy scripts
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: ./deploy
+          severity: warning
+
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: hadolint infra Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          recursive: true
+          dockerfile: "**/Dockerfile"
+          ignore: DL3008,DL3009,DL3018
+
+  alembic-hypertable-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install lint deps
+        run: pip install --quiet pyyaml sqlglot
+      - name: Run alembic hypertable PK lint
+        run: python tools/lint_hypertable_pk.py
+
+  parents-n-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid parents[N>=2] arithmetic in apps/ + packages/
+        run: |
+          set -e
+          # parents[1] is acceptable (intra-package "find sibling"). What
+          # broke fresh-bringup in D6 was N>=2 walking up to the repo
+          # root — that arithmetic doesn't survive a container layout
+          # different from the source tree. Use
+          # `featureflags.paths.repo_root()` instead.
+          if grep -rn --include='*.py' -E '\.parents\[[2-9]\]|\.parents\[[1-9][0-9]+\]' apps packages \
+              | grep -v '/tests/' \
+              | grep -v '/conftest.py'; then
+              echo "::error::Found parents[N>=2] arithmetic in production code. Use featureflags.paths.repo_root() instead (P1.6)."
+              exit 1
+          fi

@@ -13,10 +13,12 @@ from .canonical import canonical_json
 from .intel import (
     BiasBalance,
     IntelBriefV1,
+    IntelContextV1,
     IntelDashboardV1,
     IntelDigestV1,
     IntelEvent,
     IntelEventSource,
+    IntelGeoClusterV1,
     MacroRegime,
 )
 from .ops import OpsAlertV1, OpsHeartbeatV1
@@ -35,10 +37,12 @@ __all__ = [
     # intel
     "BiasBalance",
     "IntelBriefV1",
+    "IntelContextV1",
     "IntelDashboardV1",
     "IntelDigestV1",
     "IntelEvent",
     "IntelEventSource",
+    "IntelGeoClusterV1",
     "MacroRegime",
     # backtest
     "AgentDailyPnL",

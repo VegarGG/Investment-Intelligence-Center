@@ -79,3 +79,53 @@ class IntelDashboardV1(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True}
+
+
+class IntelGeoClusterV1(BaseModel):
+    """High-impact geo cluster emitted by intel (P5.5).
+
+    Fires when a region accumulates ``event_count`` events above
+    ``tone_threshold`` within ``window_hours``. The trading-room treats
+    this as a high-impact event identical to ``intel.event.high_impact.v1``.
+    """
+
+    schema_version: Literal["intel.event.geo_cluster.v1"] = Field(
+        default="intel.event.geo_cluster.v1", alias="schema"
+    )
+    cluster_id: str
+    region_label: str
+    centroid_lat: float
+    centroid_lon: float
+    event_count: int = Field(ge=1)
+    window_hours: int = Field(ge=1, le=168)
+    mean_tone: float = Field(ge=-10.0, le=10.0)
+    themes: list[str] = Field(default_factory=list)
+    notable_event_ids: list[str] = Field(default_factory=list)
+    issued_at: datetime
+
+    model_config = {"populate_by_name": True}
+
+
+class IntelContextV1(BaseModel):
+    """Per-ticker rolling 24h context emitted by intel (P2.7).
+
+    The trading room consumes this so persona / quant / fundamental nodes
+    can attach context to plans without re-fetching the underlying
+    events. Hash-friendly: every numeric field is bounded so the schema
+    is amenable to feature-flag-gated golden tests.
+    """
+
+    schema_version: Literal["intel.context.v1"] = Field(
+        default="intel.context.v1", alias="schema"
+    )
+    ticker: str
+    asof: datetime
+    window_hours: int = Field(ge=1, le=168, default=24)
+    event_count: int = Field(ge=0, default=0)
+    sentiment_ema: float = Field(ge=-1.0, le=1.0, default=0.0)
+    regime_change_score: float = Field(ge=0.0, le=1.0, default=0.0)
+    top_themes: list[str] = Field(default_factory=list)
+    top_sources: list[str] = Field(default_factory=list)
+    notable_event_ids: list[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}

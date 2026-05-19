@@ -79,3 +79,30 @@ register(
     default=False,
     owner="agent_futu",
 )
+
+# P0 — Cost breaker gating. Default OFF: until we have real spend data, do not
+# short-circuit calls to synthetic-skip; expose real provider failures instead.
+register(
+    name="cost_breaker.enabled",
+    description=(
+        "When true, LlmRouter.chat_or_skip gates calls on cost cap and falls back "
+        "to a synthetic-skip response. Default off so production runs hit real "
+        "providers and surface real failures."
+    ),
+    added_in="v2.6-P0",
+    default=False,
+    owner="platform",
+)
+
+# P0.5 — Per-caller_id concurrency cap. Numeric flag (use flag_value).
+register(
+    name="llm.concurrency.default",
+    description=(
+        "Max in-flight LlmRouter calls per caller_id. Prevents a runaway "
+        "agent from saturating provider rate-limit slots and starving "
+        "neighbours. Override per-caller via `llm.concurrency.<caller_id>`."
+    ),
+    added_in="v2.6-P0",
+    default=4,
+    owner="platform",
+)

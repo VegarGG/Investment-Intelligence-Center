@@ -1,0 +1,27 @@
+# GDELT crawler config (P2.5).
+# `themes_watch` and `tone_band` are advisory — the intel pipeline applies
+# them client-side after pulling the full 15-min file. `cadence_minutes`
+# is read by the cron registry (P2.9).
+
+cadence_minutes: 15
+
+themes_watch:
+  - ECON_*
+  - TAX_*
+  - WB_*
+  - CRISISLEX_*
+  - LEADER
+  - PROTEST
+  - SOC_GENERALSTRIKE
+  - EPU_*
+
+tone_band:
+  high_negative: -5.0
+  high_positive: 5.0
+
+# Geo-overlap rules: only emit `intel.event.high_impact.v1` when the
+# event's lat/lon is within the regions actually held by the universe.
+geo_overlap_with_universe:
+  hk_universe_box: { lat_min: 22.1, lat_max: 22.5, lon_min: 113.8, lon_max: 114.5 }
+  us_universe_box: { lat_min: 24.4, lat_max: 49.4, lon_min: -125.0, lon_max: -66.9 }
+  cn_universe_box: { lat_min: 18.0, lat_max: 53.6, lon_min: 73.6, lon_max: 134.8 }
