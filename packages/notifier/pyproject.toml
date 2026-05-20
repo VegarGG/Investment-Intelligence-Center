@@ -3,7 +3,6 @@ name = "iic-notifier"
 version = "0.1.0"
 description = "WeCom bot + WeCom app + Server酱 + ntfy + SMTP adapters (workflow 20)."
 authors = ["Ziwei <watter008@gmail.com>"]
-package-mode = false
 packages = [{ include = "notifier" }]
 
 [tool.poetry.dependencies]

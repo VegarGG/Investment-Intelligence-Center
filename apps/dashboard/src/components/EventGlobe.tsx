@@ -29,6 +29,8 @@ export function EventGlobe({ events, height = 500 }: Props) {
     [events],
   );
 
+  type Point = (typeof points)[number];
+
   return (
     <Suspense fallback={<div className="h-[500px] grid place-items-center text-zinc-500">Loading globe…</div>}>
       <Globe
@@ -36,10 +38,10 @@ export function EventGlobe({ events, height = 500 }: Props) {
         backgroundColor="rgba(0,0,0,0)"
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
         pointsData={points}
-        pointAltitude={(d: { size: number }) => d.size * 0.05}
-        pointColor={(d: { color: string }) => d.color}
-        pointRadius={(d: { size: number }) => d.size}
-        pointLabel={(d: { label: string }) => d.label}
+        pointAltitude={(d: object) => (d as Point).size * 0.05}
+        pointColor={(d: object) => (d as Point).color}
+        pointRadius={(d: object) => (d as Point).size}
+        pointLabel={(d: object) => (d as Point).label}
       />
     </Suspense>
   );
