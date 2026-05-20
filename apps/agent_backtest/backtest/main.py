@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI
+from llm_client.bootstrap import lifespan_bootstrap
 
 from .opener import InMemoryPositionStore
 
 SERVICE = "agent_backtest"
 PORT = int(os.environ.get("PORT", "8085"))
-app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0")
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """D7.1 §H0.2 — optional-mode router bootstrap. The numeric harness
+    doesn't need an LLM."""
+    lifespan_bootstrap(SERVICE, strict=False)
+    yield
+
+
+app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0", lifespan=_lifespan)
 
 # Module-level book + leaderboard cache. Production swaps in
 # PostgresPositionStore once migration 0013 is applied.

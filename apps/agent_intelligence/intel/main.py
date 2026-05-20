@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from llm_client.bootstrap import lifespan_bootstrap
 
 from . import sources as sources_mod
 from .factory import IntelConfig, build_pipeline
@@ -23,8 +25,6 @@ from .factory import IntelConfig, build_pipeline
 log = logging.getLogger(__name__)
 SERVICE = "agent_intelligence"
 PORT = int(os.environ.get("PORT", "8081"))
-
-app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0")
 
 _state: dict[str, Any] = {
     "last_synth_at": None,
@@ -43,8 +43,20 @@ def set_pipeline(pipeline: Any) -> None:
     _state["pipeline"] = pipeline
 
 
-@app.on_event("startup")
-async def _startup() -> None:
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """D7.1 §H0.2 — optional-mode router bootstrap. Ingest (RSS / GDELT /
+    dedupe / embeddings) doesn't need an LLM, but ``/run/synthesize`` and
+    summary endpoints do. Gate LLM-bound paths on ``current_router()``."""
+    lifespan_bootstrap(SERVICE, strict=False)
+    await _startup_pipeline()
+    yield
+
+
+app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0", lifespan=_lifespan)
+
+
+async def _startup_pipeline() -> None:
     sources_path = os.environ.get("INTEL_SOURCES_PATH")
     if sources_path and Path(sources_path).exists():
         try:

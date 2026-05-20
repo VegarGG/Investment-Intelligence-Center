@@ -2,7 +2,7 @@
 
 > Personal, always-on, agentic investment-advisory system. Six AI agents (Intelligence, Fundamental, Quant, Persona, Backtest, Secretary) collaborate and compete on a single Linux mini-PC. Suggestion-only — no real-money trading.
 >
-> **v2.1 substrate is in production. v2.5 (Investment Board, FUTU read-only, event-flow) is fully shipped. v2.6 — prototype-to-product via the [D7 plan](plan/D7_IIC_Development_Plan_Prototype_to_Product.md), phases P0–P9 — has landed end-to-end on `feat/v2.6-d7-prototype-to-product`.**
+> **v2.1 substrate is in production. v2.5 (Investment Board, FUTU read-only, event-flow) is fully shipped. v2.6 — prototype-to-product via the [D7 plan](plan/D7_IIC_Development_Plan_Prototype_to_Product.md), phases P0–P9 — has landed end-to-end on `feat/v2.6-d7-prototype-to-product`, plus the [D7.1 hotfix](plan/D7.1_IIC_Hotfix_Plan_v2.6.1.md) that closes the wiring gap the 2026-05-19 fresh bring-up exposed.**
 
 ## Quick start (fresh Ubuntu 26.04 LTS)
 
@@ -52,6 +52,25 @@ The first-time `make setup` on a clean Ubuntu Desktop 26.04 box surfaced several
 | **Compose CMD/entrypoint interaction** | Setting `entrypoint:` cleared the image's CMD. | ✅ Obsolete after P1.3 — no agent overrides entrypoint any more |
 
 The smoke-check passes 13/13 required services on the hotfix branch; agent_futu and grafana skip lines are intentional (profile-disabled in dev). After D7, a 14th container (`iic-admin-api` on :8090) joins the default profile.
+
+## D7.1 — wiring-gap hotfix (2026-05-19)
+
+The next fresh-Ubuntu bring-up after D7 landed proved D7 had shipped the *adapters* (router, agents, schema, dashboard) but never the *bootstrap* that connects them: `lake.llm_calls` stayed at 0 after a full smoke matrix because no agent ever called `set_router()`. The [D7.1 plan](plan/D7.1_IIC_Hotfix_Plan_v2.6.1.md) sits inside D7 as a sub-version and closes that hole.
+
+| Phase | Item | What it does | Where |
+|---|---|---|---|
+| **H0** (P0) | R1 — `llm_client.bootstrap` | `router_from_env()` + `bootstrap_router_or_die()` build an `LlmRouter` from `DEEPSEEK_API_KEY`/`ANTHROPIC_API_KEY`/`GROQ_API_KEY` and call `set_router()` once at startup. `lifespan_bootstrap(strict=…)` lets the strict-mode contract coexist with the `set_router(stub)` test-fixture pattern. | [packages/llm-client/llm_client/bootstrap.py](packages/llm-client/llm_client/bootstrap.py) • lifespan added/extended in all 8 agent main.py files |
+| **H0** (P0) | R2 — wiring smoke | `deploy/smoke-check.sh` gains a 3-step wiring assertion (connector test → `POST /chat/echo` → `lake.llm_calls` row in last 5 min) that catches "router unbound" the next time it regresses. Falls back to substrate-only when no LLM key is configured. | [deploy/smoke-check.sh](deploy/smoke-check.sh) • [.github/workflows/fresh-bringup.yml](.github/workflows/fresh-bringup.yml) |
+| **H1** (P1) | R3 — `/chat` user passthrough | Secretary `/chat` accepts `X-User-Id` header (preferred) or `user`/`user_id` in body, lowercases, falls back to `"anon"`. Allow-list enforced when `SECRETARY_ALLOWED_USERS` is set; permissive otherwise. | [apps/agent_secretary/secretary/main.py](apps/agent_secretary/secretary/main.py) |
+| **H1** (P1) | R4 — `POST /chat/echo` | Always-LLM demo endpoint. Bypasses planner + allow-list, calls Flash via `chat_or_raise`, returns `{echo, llm_call_id, model, latency_ms}` — the one endpoint the wiring smoke can correlate end-to-end. Off-switch via `SECRETARY_DEMO_ENDPOINTS=off`. | secretary `main.py` + `secretary.echo` registered in [`_matrix.py`](packages/llm-client/llm_client/_matrix.py) |
+| **H2** (P2) | R5 — `restart` → `up -d --force-recreate` | DEPLOYMENT.md §4 callout: `docker compose restart` does **not** reload `.env`. Recreate is required. | [DEPLOYMENT.md](DEPLOYMENT.md) |
+| **H2** (P2) | R6 — `admin_api:8090` in smoke | Smoke script now probes the 14th container that's been in DEPLOYMENT.md §2 since D7. | [deploy/smoke-check.sh](deploy/smoke-check.sh) |
+| **H2** (P2) | R7 — `package-mode=false` lint | CI fails any PR that re-adds `package-mode = false` to `packages/*` (the latent notifier-installability bug). Also removed the existing `package-mode = false` in `packages/notifier/pyproject.toml`. | [.github/workflows/static-checks.yml](.github/workflows/static-checks.yml) |
+| **H2** (P2) | R8 — hypertable-index lint | Twin of P1.5's hypertable-PK lint. Forbids hand-created indexes that collide with the one `create_hypertable()` auto-creates on the time column. | [tools/lint_hypertable_indexes.py](tools/lint_hypertable_indexes.py) |
+| **H2** (P2) | R9 — pinned dashboard deps | Dockerfile switches `npm install` → `npm ci` against `package-lock.json`; new `apps/dashboard/.dockerignore` keeps host `node_modules` out of the build context. A transitive bump (e.g. `react-globe.gl`) can no longer break our build until it's committed to the lockfile. | [apps/dashboard/Dockerfile](apps/dashboard/Dockerfile) |
+| **H2** (P3) | R10 — LLM-bound vs data-gated table | DEPLOYMENT.md §2 documents which `/run/*` paths call the LLM, which gate on data, and what each returns on a fresh deploy — so the next bring-up reads `filings_n=0` as a feature, not a wiring bug. | [DEPLOYMENT.md](DEPLOYMENT.md) |
+
+**Definition of done:** a fresh checkout + `make setup` + `curl -X POST :8080/chat/echo` produces a row in `lake.llm_calls` with `outcome='ok'` and a non-empty `llm_call_id`. The fresh-bringup CI workflow now exercises this end-to-end when `DEEPSEEK_API_KEY` is available in repo secrets.
 
 ## Specs
 

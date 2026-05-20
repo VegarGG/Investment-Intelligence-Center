@@ -6,10 +6,12 @@ One Docker image; runtime selects slug via PERSONA_SLUG env.
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from llm_client.bootstrap import lifespan_bootstrap
 
 from .loader import load
 from .team_plan import team_plan_endpoint_payload
@@ -20,7 +22,7 @@ PORT = int(os.environ.get("PORT", "8084"))
 SLUG = os.environ.get("PERSONA_SLUG", "rogers")
 PERSONA_DIR = Path(os.environ.get("PERSONA_DIR", "docs/prompts/persona"))
 
-app = FastAPI(title=f"iic.{SERVICE}.{SLUG}", version="0.1.0")
+
 _state: dict[str, Any] = {"spec": None, "advices_24h": 0}
 
 
@@ -31,9 +33,16 @@ def _load_spec() -> PersonaSpec | None:
     return load(path)
 
 
-@app.on_event("startup")
-async def _startup() -> None:
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """D7.1 §H0.2 — strict-mode router bootstrap. The reasoner is the
+    whole point of this service, so refuse to start without an LLM."""
+    lifespan_bootstrap(SERVICE, strict=True)
     _state["spec"] = _load_spec()
+    yield
+
+
+app = FastAPI(title=f"iic.{SERVICE}.{SLUG}", version="0.1.0", lifespan=_lifespan)
 
 
 @app.get("/health")

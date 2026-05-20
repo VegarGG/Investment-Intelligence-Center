@@ -12,14 +12,16 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, Header, HTTPException, Request
+from llm_client.bootstrap import lifespan_bootstrap
 
 from .agents import HttpxAgentClient, StubAgentClient
-from .auth import is_allowed
+from .auth import allowed_users, is_allowed
 from .inbound.alertmanager import (
     BadAlertmanagerPayload,
     parse_payload,
@@ -36,7 +38,16 @@ SERVICE = "agent_secretary"
 PORT = int(os.environ.get("PORT", "8086"))
 WECOM_TOKEN = os.environ.get("WECOM_TOKEN", "stub-token")
 
-app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """D7.1 §H0.2 — strict-mode router bootstrap. Secretary is the front
+    door; ``/chat`` has no meaning without an LLM, so we crash early with
+    a clear message if no provider key is configured."""
+    lifespan_bootstrap(SERVICE, strict=True)
+    yield
+
+
+app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0", lifespan=_lifespan)
 
 
 def _init_agents():
@@ -100,12 +111,37 @@ async def set_pref(user_id: str, key: str, body: dict[str, Any] = Body(...)) -> 
 
 
 # ---- /chat (P6.3) -----------------------------------------------------------
+def _resolve_user_id(body: dict[str, Any], header_value: str | None) -> str:
+    """D7.1 §H1.1 — derive the caller's user id from header or body.
+
+    Precedence: ``X-User-Id`` header > body ``user`` > body ``user_id`` >
+    literal ``"anon"``. The header is preferred so authenticated callers
+    cannot be impersonated by body content. The ``user`` alias matches
+    what the bringup caller sent (``{"user":"ziwei","text":"hi"}``); the
+    ``user_id`` alias is the original P6 field.
+    """
+    raw = header_value or body.get("user") or body.get("user_id") or "anon"
+    return str(raw).strip().lower() or "anon"
+
+
 @app.post("/chat")
-async def chat(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+async def chat(
+    body: dict[str, Any] = Body(...),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+) -> dict[str, Any]:
     text = str(body.get("text", "")).strip()
     if not text:
         raise HTTPException(status_code=400, detail="missing 'text'")
-    user_id = str(body.get("user_id", "anon"))
+    user_id = _resolve_user_id(body, x_user_id)
+    # Enforce allow-list only when one is configured. An unconfigured
+    # allow-list keeps fresh dev installs permissive (D7.1 §H1.1 acceptance).
+    # Comparison is case-insensitive to match how end users type their id.
+    allowed = {u.lower() for u in allowed_users()}
+    if allowed and not is_allowed(user_id, allowed=allowed):
+        raise HTTPException(
+            status_code=403,
+            detail={"detail": "user not in allowlist", "user_id": user_id},
+        )
     thread_id = str(body.get("thread_id") or uuid4())
     trace_id = str(body.get("trace_id") or uuid4())
 
@@ -146,6 +182,51 @@ def _stitch_answer(text: str, results: list[dict[str, Any]]) -> str:
     for r in results:
         lines.append(f"- {r['caller']} {r['endpoint']} → {r['result']}")
     return "\n".join(lines)
+
+
+# ---- /chat/echo (D7.1 §H1.2) ------------------------------------------------
+@app.post("/chat/echo")
+async def chat_echo(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """Always-LLM demo endpoint. Used by the fresh-bringup wiring smoke.
+
+    Bypasses the allow-list (so a fresh deploy can prove wiring before
+    SECRETARY_ALLOWED_USERS is set), bypasses the planner, and asks the
+    cheapest available tier to echo the input. Returns the LLM response
+    plus the request id that lands in ``lake.llm_calls`` — the smoke
+    asserts on both.
+
+    Disable in prod via ``SECRETARY_DEMO_ENDPOINTS=off``.
+    """
+    if os.environ.get("SECRETARY_DEMO_ENDPOINTS", "on").lower() == "off":
+        raise HTTPException(status_code=404, detail="demo endpoints disabled")
+    text = str(body.get("text", "")).strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="missing 'text'")
+    from llm_client import ChatMessage
+    from llm_client.exceptions import NoLLMAvailable
+    from llm_client.router import current_router
+
+    router = current_router()
+    if router is None:
+        raise HTTPException(status_code=503, detail="no LLM router bound — see D7.1 §H0")
+    msg = ChatMessage(role="user", content=f"Echo this back verbatim: {text!r}")
+    try:
+        resp = await router.chat_or_raise(
+            caller_id="secretary.echo",
+            messages=[msg],
+            force_tier="flash",
+            max_tokens=64,
+            temperature=0.0,
+        )
+    except NoLLMAvailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "echo": resp.text,
+        "llm_call_id": resp.request_id,
+        "model": resp.model,
+        "tier": resp.tier,
+        "latency_ms": resp.latency_ms,
+    }
 
 
 # ---- /rerun (P6.6) ----------------------------------------------------------

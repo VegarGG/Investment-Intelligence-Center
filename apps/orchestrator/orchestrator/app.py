@@ -47,6 +47,12 @@ _heartbeat_task: asyncio.Task[None] | None = None
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):  # type: ignore[no-untyped-def]
+    # D7.1 §H0.2 — optional-mode router bootstrap. The orchestrator's
+    # routing logic is rule-based, but DAG nodes downstream call back
+    # through the module-level chat() helpers and need set_router() done.
+    from llm_client.bootstrap import lifespan_bootstrap
+
+    lifespan_bootstrap(SERVICE, strict=False)
     if os.environ.get("ORCH_AUTOSTART") == "1":
         await _bootstrap()
     yield

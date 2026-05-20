@@ -79,6 +79,30 @@ After setup completes, you have **16 containers** running (the v2.6 admin API is
 
 If any of these is missing or unhealthy, run `make health` for a quick diagnostic and `make logs SVC=<name>` to see why.
 
+### Agent surfaces — which call the LLM, which gate on data
+
+Several agent endpoints look identical on the wire (HTTP 200 + JSON) whether
+or not they actually exercised the LLM router. The table below makes that
+explicit so a fresh deploy's "filings_n=0" or "(no agents dispatched)" can
+be read as a *data gate*, not a wiring bug. **Use `POST /chat/echo` to
+verify wiring** — it always calls the LLM and returns the resulting
+`llm_call_id` (added in D7.1 §H1.2 / R4).
+
+| Endpoint | Service | Calls LLM? | Data gate | Fresh-deploy behaviour |
+|---|---|---|---|---|
+| `POST /chat/echo` | secretary | **always** | none | Returns `{echo, llm_call_id, model, latency_ms}`. **Smoke uses this.** |
+| `POST /chat` | secretary | conditional | allow-list + planner match | `"(no agents dispatched for: …)"` if planner finds no route. Accepts `X-User-Id` header or `user`/`user_id` in body (D7.1 §H1.1). |
+| `POST /run/morning_brief` | secretary | yes | needs upstream agents up | Returns a degraded brief on fresh deploy. |
+| `POST /run/daily` | persona | yes | needs persona spec + memory bound | `"persona digest + memory not yet bound; reasoner skipped"`. |
+| `POST /run/cover/{ticker}` | fundamental | yes | needs filings in lake | `{"filings_n":0}` without LLM call if no filings staged. |
+| `POST /run/signal` (factors) | quant | conditional | needs price history | Returns regime="unknown" / empty factor maps if no history. |
+| `POST /decide` | board | yes | needs `trading_room.investment_board.enabled=true` | `flag_disabled`. |
+| `POST /run/synthesize` | intelligence | yes | needs `INTEL_AUTOSTART=1` + sources | 503 `pipeline not configured` until the pipeline is built. |
+
+Allow-list (`SECRETARY_ALLOWED_USERS`) is matched case-insensitively against
+the resolved user id; an unset allow-list is treated as permissive so a
+fresh dev install works without configuring users.
+
 ---
 
 ## 3. Common operations
@@ -142,10 +166,21 @@ Or use the dashboard: open <http://localhost:4173/admin/connectors>, click **Tes
 
 ### Legacy path: edit .env directly (still works)
 
+> ❗ `docker compose restart` does **not** reload `.env`. Compose bakes env
+> at container *create* time, so the only way to pick up edits is
+> `up -d --force-recreate`. See D7.1 §H2.1 for the incident this prevents.
+
 ```bash
 sed -i 's|^DEEPSEEK_API_KEY=$|DEEPSEEK_API_KEY=sk-your-key-here|' .env
-docker compose restart orchestrator agent_intelligence agent_secretary \
-  agent_persona agent_fundamental agent_quant agent_board
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --force-recreate \
+  orchestrator agent_intelligence agent_secretary \
+  agent_persona agent_fundamental agent_quant agent_board admin_api
+```
+
+If you only changed one service, you can scope the recreate:
+
+```bash
+docker compose up -d --force-recreate agent_secretary
 ```
 
 ### LLM providers
@@ -194,8 +229,10 @@ The Investment Board + Trading-room DAG (v2.5 N3.3) ship but are **off by defaul
 #   cost_breaker.enabled: false                   # v2.6 P0 — keep off until you have real spend data
 #   llm.concurrency.default: 4                    # v2.6 P0.5 — per-caller_id concurrency cap
 
-# Bounce affected services
-docker compose restart orchestrator agent_board agent_intelligence agent_secretary
+# Bounce affected services (these flags read from /srv/iic/featureflags/flags.yaml,
+# not the container env, so plain `restart` is fine here — but stay consistent
+# with the .env workflow above by preferring up -d --force-recreate).
+docker compose up -d --force-recreate orchestrator agent_board agent_intelligence agent_secretary
 ```
 
 Or use the dashboard: <http://localhost:4173/admin/agents> for a flags YAML editor that chains a row to `lake.config_audit`.

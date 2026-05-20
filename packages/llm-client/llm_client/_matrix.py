@@ -74,6 +74,9 @@ MATRIX: dict[str, CallerSpec] = {
     "secretary.chat": CallerSpec(default_tier="flash", escalate_when=_secretary_explain_deeply),
     "secretary.brief.morning": CallerSpec(default_tier="pro", escalate_when=_always),
     "secretary.brief.midday": CallerSpec(default_tier="flash"),
+    # D7.1 §H1.2 — always-LLM demo endpoint (POST /chat/echo) used by the
+    # fresh-bringup wiring smoke. Flash so the smoke gate stays cheap.
+    "secretary.echo": CallerSpec(default_tier="flash"),
     # P6.2 — secretary's natural-language planner. Pro on multi-step
     # questions; flash on single-RPC questions.
     "secretary.plan": CallerSpec(

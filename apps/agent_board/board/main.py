@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from typing import Any
 
 import featureflags.registry  # noqa: F401  ensure canonical flags are registered
 from fastapi import FastAPI
 from featureflags import flag
+from llm_client.bootstrap import lifespan_bootstrap
 from schema.plan import PlanV1
 
 from .bull_bear import debate
@@ -21,7 +23,16 @@ log = logging.getLogger(__name__)
 SERVICE = "agent_board"
 PORT = int(os.environ.get("PORT", "8088"))
 
-app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """D7.1 §H0.2 — strict-mode router bootstrap. The Bull/Bear → Risk →
+    Chair pipeline is LLM end-to-end."""
+    lifespan_bootstrap(SERVICE, strict=True)
+    yield
+
+
+app = FastAPI(title=f"iic.{SERVICE}", version="0.1.0", lifespan=_lifespan)
 
 
 @app.get("/health")

@@ -65,6 +65,9 @@ class _Router:
             timeout_s=timeout_s,
         )
 
+    chat_or_raise = chat
+    chat_or_skip = chat
+
     async def embed(self, caller_id: str, texts: list[str]) -> EmbedResponse:
         return await self._adapter.embed(texts, timeout_s=30.0)
 

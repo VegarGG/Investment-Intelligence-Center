@@ -1,0 +1,7 @@
+# D7.1 §H2.5 — keep host node_modules and build artifacts out of the
+# image context so `npm ci` reproducibly installs from package-lock.json
+# instead of inheriting a local install.
+node_modules
+dist
+.git
+*.log

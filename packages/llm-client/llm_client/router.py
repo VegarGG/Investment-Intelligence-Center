@@ -492,6 +492,13 @@ def get_router() -> LlmRouter:
     return _default_router
 
 
+def current_router() -> LlmRouter | None:
+    """Non-raising twin of :func:`get_router`. Used by D7.1 bootstrap to
+    let the FastAPI lifespan skip re-bootstrapping when a test fixture has
+    already installed a stub router."""
+    return _default_router
+
+
 async def chat(
     caller_id: str,
     messages: list[ChatMessage],

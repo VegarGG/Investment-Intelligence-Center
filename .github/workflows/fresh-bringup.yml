@@ -40,6 +40,8 @@ jobs:
           df -h
 
       - name: Render minimal .env for CI
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           cp .env.example .env
           # IIC_REPO_ROOT and matching test creds the smoke check expects.
@@ -51,6 +53,14 @@ jobs:
             echo "MINIO_ROOT_USER=miniociuser"
             echo "MINIO_ROOT_PASSWORD=miniocipassword"
           } >> .env
+          # D7.1 §H0.3 — when a DEEPSEEK_API_KEY secret is present, the
+          # smoke check exercises the LLM round-trip via /chat/echo and
+          # asserts a lake.llm_calls row. Without the secret, the smoke
+          # falls back to substrate-only (still gates the bringup).
+          if [ -n "${DEEPSEEK_API_KEY:-}" ]; then
+            # Replace the empty DEEPSEEK_API_KEY= line from .env.example.
+            sed -i "s|^DEEPSEEK_API_KEY=.*$|DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}|" .env
+          fi
 
       - name: Build iic-base
         run: docker build -f infra/iic-base/Dockerfile -t iic-base:latest .
@@ -62,6 +72,9 @@ jobs:
         run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
       - name: Wait for healthy + run smoke check
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          LAKE_DSN: postgresql://iic:ci-test-password@localhost:5432/iic
         run: |
           set -euo pipefail
           # Up to 5 minutes for substrate + 9 agents to settle.

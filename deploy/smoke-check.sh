@@ -27,6 +27,7 @@ SERVICES=(
   "agent_secretary|http://localhost:8086/health|0"
   "agent_futu|http://localhost:8087/health|0"
   "agent_board|http://localhost:8088/health|0"
+  "admin_api|http://localhost:8090/admin/health|1"
   "dashboard|http://localhost:4173/|1"
   "grafana|http://localhost:3000/api/health|0"
   "minio_console|http://localhost:9001/|0"
@@ -92,3 +93,75 @@ if [[ "${failures}" -gt 0 ]]; then
 fi
 
 printf "${GREEN}All required services healthy.${RESET}\n"
+
+# ---------------------------------------------------------------------------
+# Wiring smoke (D7.1 §H0.3) — prove at least one LLM round-trip got recorded.
+#
+# Structural /health checks above only assert "the container started and
+# returned 200." They do NOT exercise the LLM bind. Without this block, an
+# unbound LlmRouter passes the smoke gate and `lake.llm_calls` stays at 0
+# in production (the v2.6 bringup state).
+#
+# The three checks are intentionally separable so a failure points at one
+# root cause:
+#   1. Connector test  → key reaches the provider
+#   2. /chat/echo      → router is bound, end-to-end LLM dispatch works
+#   3. lake.llm_calls  → telemetry persistence works
+# ---------------------------------------------------------------------------
+ADMIN_API="${ADMIN_API:-http://localhost:8090}"
+SECRETARY="${SECRETARY:-http://localhost:8086}"
+
+if [[ -n "${DEEPSEEK_API_KEY:-}" || -n "${ANTHROPIC_API_KEY:-}" || -n "${GROQ_API_KEY:-}" ]]; then
+  echo ""
+  echo "==> Wiring smoke"
+  wiring_failures=0
+
+  if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
+    if curl -fsS -X POST "${ADMIN_API}/admin/connectors/deepseek/test" 2>/dev/null \
+       | grep -q '"state"\s*:\s*"ok"'; then
+      printf "${GREEN}OK${RESET}    %-22s deepseek connector test\n" "wiring.connector"
+    else
+      printf "${RED}FAIL${RESET}  %-22s deepseek connector test\n" "wiring.connector"
+      wiring_failures=$((wiring_failures + 1))
+    fi
+  fi
+
+  echo_body='{"text":"ping"}'
+  echo_resp="$(curl -fsS -X POST "${SECRETARY}/chat/echo" \
+    -H 'Content-Type: application/json' \
+    -d "${echo_body}" 2>/dev/null || echo "")"
+  if echo "${echo_resp}" | grep -q '"llm_call_id"'; then
+    printf "${GREEN}OK${RESET}    %-22s /chat/echo produced llm_call_id\n" "wiring.echo"
+  else
+    printf "${RED}FAIL${RESET}  %-22s /chat/echo produced no llm_call_id (resp=%s)\n" \
+      "wiring.echo" "${echo_resp:0:120}"
+    wiring_failures=$((wiring_failures + 1))
+  fi
+
+  if [[ -n "${LAKE_DSN:-}" ]] && command -v psql >/dev/null 2>&1; then
+    cnt="$(psql "${LAKE_DSN}" -tAc \
+      "SELECT COUNT(*) FROM lake.llm_calls WHERE outcome='ok' AND ts > now() - interval '5 minutes';" \
+      2>/dev/null || echo 0)"
+    if [[ "${cnt:-0}" -ge 1 ]]; then
+      printf "${GREEN}OK${RESET}    %-22s lake.llm_calls ok rows=%s in last 5m\n" \
+        "wiring.lake" "${cnt}"
+    else
+      printf "${RED}FAIL${RESET}  %-22s lake.llm_calls has no recent ok row\n" "wiring.lake"
+      wiring_failures=$((wiring_failures + 1))
+    fi
+  else
+    printf "${YELLOW}skip${RESET}  %-22s lake.llm_calls check (need LAKE_DSN + psql)\n" \
+      "wiring.lake"
+  fi
+
+  if [[ "${wiring_failures}" -gt 0 ]]; then
+    printf "${RED}%d wiring smoke step(s) failed.${RESET}\n" "${wiring_failures}"
+    echo "  - Router unbound? Check D7.1 §H0 (each agent must call llm_client.bootstrap)."
+    echo "  - See D7.1 §H0.3 for the meaning of each step."
+    exit 1
+  fi
+  printf "${GREEN}Wiring smoke passed.${RESET}\n"
+else
+  echo ""
+  printf "${YELLOW}skip${RESET}  wiring smoke (no LLM key configured — substrate-only OK)\n"
+fi

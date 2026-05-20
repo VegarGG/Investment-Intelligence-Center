@@ -2,8 +2,12 @@ FROM node:20-slim AS build
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+# D7.1 §H2.5 — copy the lockfile and use `npm ci` so a transitive bump on
+# npm (e.g. react-globe.gl) cannot break our build until the change is
+# explicitly committed to package-lock.json. `npm ci` refuses to install
+# if it would mutate the lockfile.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 RUN npm run build

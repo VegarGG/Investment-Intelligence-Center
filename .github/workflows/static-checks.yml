@@ -70,3 +70,36 @@ jobs:
               echo "::error::Found parents[N>=2] arithmetic in production code. Use featureflags.paths.repo_root() instead (P1.6)."
               exit 1
           fi
+
+  poetry-package-mode-lint:
+    # D7.1 §H2.3 — a `package-mode = false` line in a shared package's
+    # pyproject.toml makes the package un-installable under PEP 517, which
+    # broke the notifier silently for 2 weeks in the v2.6 bringup. The
+    # iic-base image installs every packages/* editable; if any of them
+    # declares package-mode=false, the build appears to succeed but the
+    # symbol it exports is never importable.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid Poetry package-mode=false in shared packages
+        run: |
+          set -e
+          if grep -rnE '^\s*package-mode\s*=\s*false' packages/; then
+            echo "::error::package-mode=false found in packages/ — this breaks pip install -e under PEP 517."
+            echo "See D7.1 §H2.3."
+            exit 1
+          fi
+
+  hypertable-index-lint:
+    # D7.1 §H2.4 — twin of the existing alembic-hypertable PK lint. A
+    # hand-created index on a hypertable's time column collides with the
+    # one create_hypertable() auto-creates and raises 'relation already
+    # exists' at upgrade time.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run alembic hypertable index lint
+        run: python tools/lint_hypertable_indexes.py
