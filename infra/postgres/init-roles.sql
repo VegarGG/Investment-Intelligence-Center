@@ -49,3 +49,11 @@ GRANT USAGE, CREATE ON SCHEMA public TO iic_migration;
 
 -- The application role and read-only role get USAGE on `lake` after the
 -- first migration applies (see migration 0001).
+
+-- Pre-create extensions that require superuser. `timescaledb` and
+-- `pg_partman` ship pre-packaged as trusted in the timescaledb-ha image
+-- and can be created by `iic_migration` from migration 0001. `vector`
+-- (pgvector) is shipped but NOT in the trusted list, so migration 0007
+-- would error with "permission denied to create extension". Pre-create
+-- it here while we're connected as the superuser.
+CREATE EXTENSION IF NOT EXISTS vector;

@@ -44,7 +44,9 @@ def upgrade() -> None:
         "CREATE INDEX intel_embeds_cos_idx ON lake.intel_embeds "
         "USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);"
     )
-    op.execute("CREATE INDEX intel_embeds_ts_idx ON lake.intel_embeds (ts DESC)")
+    # `create_hypertable` above auto-creates an index named
+    # `<table>_<time_col>_idx` on the time dimension — i.e. exactly
+    # `intel_embeds_ts_idx`. Don't recreate it.
 
 
 def downgrade() -> None:

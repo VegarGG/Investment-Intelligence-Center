@@ -41,7 +41,8 @@ def upgrade() -> None:
         "SELECT create_hypertable('lake.geo_events', 'ts', "
         "chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);"
     )
-    op.execute("CREATE INDEX geo_events_ts_idx ON lake.geo_events (ts DESC)")
+    # `create_hypertable` already creates `geo_events_ts_idx` on the time
+    # dimension; don't redeclare it.
     op.execute("CREATE INDEX geo_events_theme_idx ON lake.geo_events (theme, ts DESC)")
     op.execute(
         "CREATE INDEX geo_events_latlon_idx ON lake.geo_events (lat, lon)"
