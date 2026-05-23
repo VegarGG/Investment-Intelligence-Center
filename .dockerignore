@@ -1,0 +1,44 @@
+# Repo-root .dockerignore — applies to every image whose build context is
+# the repo root (iic-base, all agents, admin_api, dashboard after D9 §4.2).
+#
+# Keep this list conservative: it must be safe for every Dockerfile that
+# COPYs from repo root. Per-app ignores live alongside the per-app Dockerfile
+# and stack on top of this one.
+
+.git
+.gitignore
+.github
+
+# Python build/test artifacts
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.venv
+**/venv
+**/*.egg-info
+**/htmlcov
+**/coverage.xml
+.coverage
+
+# Node / dashboard build artifacts
+**/node_modules
+**/dist
+**/.vite
+
+# Local secrets and deploy state
+.env
+.env.local
+.env.*.local
+.deploy
+secrets/sealed/*.dec.yaml
+
+# IDE noise
+.vscode
+.idea
+**/*.log
+
+# OS noise
+.DS_Store
+Thumbs.db

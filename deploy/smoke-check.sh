@@ -95,6 +95,30 @@ fi
 printf "${GREEN}All required services healthy.${RESET}\n"
 
 # ---------------------------------------------------------------------------
+# Dashboard SPA-route smoke (D9 §4.2 / §5.8 L1) — nginx must serve index.html
+# for non-API paths, not the default 404. Without this, /map (and every other
+# React Router sub-route) breaks on hard refresh.
+# ---------------------------------------------------------------------------
+echo ""
+echo "==> Dashboard SPA-route smoke"
+spa_failures=0
+for path in /map /trading-room /admin/connectors; do
+  resp="$(curl -fsS --max-time 5 "http://localhost:4173${path}" 2>/dev/null || echo "")"
+  if echo "${resp}" | grep -q 'id="root"'; then
+    printf "${GREEN}OK${RESET}    %-22s %s served SPA index\n" "spa${path}" "${path}"
+  else
+    printf "${RED}FAIL${RESET}  %-22s %s did not serve SPA index\n" "spa${path}" "${path}"
+    spa_failures=$((spa_failures + 1))
+  fi
+done
+if [[ "${spa_failures}" -gt 0 ]]; then
+  printf "${RED}%d SPA-route check(s) failed.${RESET}\n" "${spa_failures}"
+  echo "  - Check infra/nginx/dashboard.conf has 'try_files \$uri \$uri/ /index.html;'"
+  echo "  - D9 §4.2 has the canonical config."
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
 # Wiring smoke (D7.1 §H0.3) — prove at least one LLM round-trip got recorded.
 #
 # Structural /health checks above only assert "the container started and

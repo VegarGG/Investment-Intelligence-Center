@@ -292,7 +292,9 @@ services:
 
   dashboard:
     <<: *iic-base
-    build: { context: ./apps/dashboard }
+    # D9 §4.2 — build context is the repo root so the Dockerfile can COPY
+    # infra/nginx/dashboard.conf (the SPA-aware nginx config).
+    build: { context: ., dockerfile: apps/dashboard/Dockerfile }
     container_name: iic-dashboard
     ports: ["4173:80"]
     mem_limit: 256m
