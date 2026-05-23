@@ -86,30 +86,87 @@ def _build_fallback_chain() -> FallbackChain:
     return FallbackChain(pro_fallback=pro, flash_fallback=flash)
 
 
+def _resolve_lake_dsn() -> str | None:
+    """Find a usable async DSN for the telemetry sink.
+
+    Precedence (first hit wins):
+      1. ``LAKE_DSN`` — explicit override, used as-is. Operator-facing.
+      2. ``IIC_PG_DSN_APP`` — the app-role DSN every agent already has
+         injected via the iic-base compose env. Scheme is rewritten to
+         ``postgresql+asyncpg://`` so sqlalchemy picks the async driver
+         instead of psycopg2 (which would deadlock the event loop).
+      3. ``POSTGRES_{USER,PASSWORD,HOST,PORT,DB}`` — last-resort build
+         from individual env vars so a hand-rolled compose without
+         IIC_PG_DSN_APP still gets telemetry persistence.
+
+    Returns None only if none of the above are populated. That was the
+    v2.6 bringup state: every agent had IIC_PG_DSN_APP but bootstrap
+    only knew about LAKE_DSN, so the sink silently NullTelemetrySink'd
+    and ``lake.llm_calls`` stayed at 0 (the D7.1 §H0.3 smoke gate
+    couldn't see it because it asserts via psql, not via the sink).
+    """
+    if dsn := os.environ.get("LAKE_DSN"):
+        return dsn
+    if dsn := os.environ.get("IIC_PG_DSN_APP"):
+        # `postgresql://` → `postgresql+asyncpg://`. Idempotent if the
+        # operator already supplied the +asyncpg form.
+        if dsn.startswith("postgresql+"):
+            return dsn
+        if dsn.startswith("postgresql://"):
+            return "postgresql+asyncpg://" + dsn[len("postgresql://") :]
+        if dsn.startswith("postgres://"):
+            return "postgresql+asyncpg://" + dsn[len("postgres://") :]
+        return dsn
+    user = os.environ.get("POSTGRES_USER")
+    password = os.environ.get("POSTGRES_PASSWORD")
+    host = os.environ.get("POSTGRES_HOST")
+    db = os.environ.get("POSTGRES_DB")
+    if user and password and host and db:
+        port = os.environ.get("POSTGRES_PORT", "5432")
+        return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
+    return None
+
+
 def _build_telemetry_sink() -> TelemetrySink:
-    """PostgresTelemetrySink if LAKE_DSN is set, else NullTelemetrySink.
+    """PostgresTelemetrySink if we can resolve a DSN, else NullTelemetrySink.
 
     The smoke gate (D7.1 §H0.3) asserts on ``lake.llm_calls`` directly, so
-    a deploy that wants real wiring observability must set ``LAKE_DSN``.
-    Dev / unit-test environments without a lake fall through to the null
-    sink — the router still works, telemetry just drops on the floor.
+    a deploy that wants real wiring observability needs Postgres reachable
+    AND the iic_app role to have INSERT on lake.llm_calls (migration 0001
+    grants it). Dev / unit-test environments without a DSN fall through to
+    the null sink — the router still works, telemetry just drops on the
+    floor.
     """
-    dsn = os.environ.get("LAKE_DSN")
+    dsn = _resolve_lake_dsn()
     if not dsn:
+        log.info(
+            "telemetry: no LAKE_DSN / IIC_PG_DSN_APP / POSTGRES_* resolved; "
+            "using NullTelemetrySink — lake.llm_calls will not receive rows"
+        )
         return NullTelemetrySink()
     try:
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
         engine = create_async_engine(dsn, pool_pre_ping=True, pool_recycle=600)
         sm = async_sessionmaker(engine, expire_on_commit=False)
+        log.info("telemetry: PostgresTelemetrySink built (DSN host=%s)", _dsn_host(dsn))
         return PostgresTelemetrySink(sessionmaker=sm)
     except Exception as exc:  # pragma: no cover — defensive at boot
         log.warning(
-            "telemetry: failed to build PostgresTelemetrySink from LAKE_DSN (%s); "
+            "telemetry: failed to build PostgresTelemetrySink from resolved DSN (%s); "
             "falling back to NullTelemetrySink",
             exc,
         )
         return NullTelemetrySink()
+
+
+def _dsn_host(dsn: str) -> str:
+    """Best-effort host extraction for log lines — never raises."""
+    try:
+        after_at = dsn.split("@", 1)[1]
+        return after_at.split("/", 1)[0]
+    except (IndexError, AttributeError):
+        return "?"
 
 
 def router_from_env() -> LlmRouter | None:
