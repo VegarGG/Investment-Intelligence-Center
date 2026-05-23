@@ -98,6 +98,17 @@ The v2.5 plan supersedes v2.1's phase mapping with a tier-staged contract: T0 pr
 
 For the v2.1 phase mapping (still relevant — it documents the substrate v2.5 builds on), see workflow 00.
 
+## Third-party attributions
+
+The Live Map (`apps/dashboard/src/components/LiveMap/`) adapts patterns from
+[koala73/worldmonitor](https://github.com/koala73/worldmonitor) (AGPL-3.0,
+© Elie Habib 2024–2026). Vendored bits live under
+[`apps/dashboard/src/components/LiveMap/_vendor_worldmonitor/`](apps/dashboard/src/components/LiveMap/_vendor_worldmonitor/)
+and carry AGPL-3.0 headers; the surrounding IIC code is unaffected. IIC is
+operated as a personal/research project and makes no commercial use of
+worldmonitor's code. See the [vendor README](apps/dashboard/src/components/LiveMap/_vendor_worldmonitor/README.md)
+for what was adapted and the license posture (D9 §5.3).
+
 ## Disclaimer
 
 For personal research only. Not investment advice. IIC is not a registered investment advisor. The FUTU integration is read-only by construction; see [`docs/security/FUTU_readonly_review.md`](docs/security/FUTU_readonly_review.md) for the defence-in-depth story.

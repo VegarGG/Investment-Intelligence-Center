@@ -16,7 +16,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+import asyncio
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from llm_client.bootstrap import lifespan_bootstrap
 
 from . import sources as sources_mod
@@ -246,6 +248,64 @@ def _parse_window(window: str) -> int:
     if unit == "d":
         return n * 86400
     return 24 * 3600
+
+
+@app.websocket("/api/stream/geo_events")
+async def geo_events_stream(ws: WebSocket) -> None:
+    """D9 §5.6 — WebSocket fanout for the LiveMap dashboard.
+
+    Streams new rows from ``lake.geo_events`` to connected clients. MVP
+    implementation polls every 5 s using ``ts`` as a monotonic cursor
+    (TimescaleDB hypertable, so the bounded scan is cheap). Production
+    should swap to a NATS subscription on the intel-publish subject;
+    deferred to D9 V3 once the publish path is real.
+    """
+    await ws.accept()
+    sm = _state.get("geo_sessionmaker")
+    if sm is None:
+        # No DB wired (dev mode without INTEL_AUTOSTART). Hold the
+        # connection open so the client renders "stream open" rather
+        # than reconnecting in a tight loop, but emit nothing.
+        try:
+            while True:
+                await asyncio.sleep(60)
+        except WebSocketDisconnect:
+            return
+
+    from datetime import UTC, datetime
+
+    from sqlalchemy import text
+
+    # Cursor starts at "now" so we only stream new rows, not history.
+    cursor = datetime.now(UTC)
+    sql = (
+        "SELECT event_id::text AS event_id, ts, lat, lon, theme, tone, "
+        "src_url, place "
+        "FROM lake.geo_events WHERE ts > :cursor ORDER BY ts ASC LIMIT 500"
+    )
+
+    try:
+        while True:
+            async with sm() as session:  # type: ignore[operator]
+                res = await session.execute(text(sql), {"cursor": cursor})
+                rows = res.all()
+            for r in rows:
+                cursor = max(cursor, r.ts)
+                await ws.send_json(
+                    {
+                        "event_id": r.event_id,
+                        "ts": r.ts.isoformat(),
+                        "lat": r.lat,
+                        "lon": r.lon,
+                        "theme": r.theme,
+                        "tone": r.tone,
+                        "src_url": r.src_url,
+                        "place": r.place,
+                    }
+                )
+            await asyncio.sleep(5)
+    except WebSocketDisconnect:
+        return
 
 
 @app.post("/run/context")
