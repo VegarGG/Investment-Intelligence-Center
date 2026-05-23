@@ -41,7 +41,9 @@ def upgrade() -> None:
         "SELECT create_hypertable('lake.geo_events', 'ts', "
         "chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);"
     )
-    op.execute("CREATE INDEX geo_events_ts_idx ON lake.geo_events (ts DESC)")
+    # D7.1 §H2.7 — do NOT create geo_events_ts_idx here. create_hypertable()
+    # above already created a B-tree index on the time column with exactly
+    # that name; re-creating raises 'relation already exists' on fresh DB.
     op.execute("CREATE INDEX geo_events_theme_idx ON lake.geo_events (theme, ts DESC)")
     op.execute(
         "CREATE INDEX geo_events_latlon_idx ON lake.geo_events (lat, lon)"

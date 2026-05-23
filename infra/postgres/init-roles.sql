@@ -49,3 +49,9 @@ GRANT USAGE, CREATE ON SCHEMA public TO iic_migration;
 
 -- The application role and read-only role get USAGE on `lake` after the
 -- first migration applies (see migration 0001).
+
+-- D7.1 §H2.7 — pre-create pgvector as superuser before any migration tries to.
+-- pgvector ships pre-built in timescaledb-ha but is not in the PG trusted-extension
+-- allow-list, so iic_migration (non-superuser) cannot CREATE EXTENSION vector
+-- on its own. Idempotent: IF NOT EXISTS is a no-op on re-runs.
+CREATE EXTENSION IF NOT EXISTS vector;

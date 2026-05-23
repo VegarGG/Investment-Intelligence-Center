@@ -15,8 +15,11 @@ Parse each Alembic migration under
 
 * ``create_hypertable("lake.<table>", "<time_col>", ...)`` calls; capture
   the implicit auto-index name ``<table>_<time_col>_idx``.
-* ``op.create_index(...)`` calls whose first argument equals one of the
-  captured auto-index names.
+* Both forms of subsequent index creation that produce the same name:
+  - ``op.create_index("<name>", ...)`` (Python call form).
+  - ``op.execute("CREATE INDEX <name> ON …")`` (raw SQL form — this is
+    the variant that bit migrations 0007 + 0010 and slipped past the
+    original D7.1 lint, see §H2.7).
 
 Twin of :mod:`tools.lint_hypertable_pk`.
 
@@ -44,8 +47,16 @@ HYPERTABLE_RE = re.compile(
 )
 
 # Match: op.create_index("<name>", ...) or create_index("<name>", ...).
-CREATE_INDEX_RE = re.compile(
+CREATE_INDEX_PY_RE = re.compile(
     r"""(?:op\.)?create_index\(\s*['"](?P<index>\w+)['"]"""
+)
+
+# Match raw SQL: CREATE INDEX [IF NOT EXISTS] <name> ON …
+# Catches the op.execute("CREATE INDEX <t>_<col>_idx ON …") variant that
+# slipped past the original D7.1 lint (see §H2.7 — migrations 0007 + 0010).
+CREATE_INDEX_SQL_RE = re.compile(
+    r"""CREATE\s+INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?P<index>\w+)\s+ON\s+""",
+    re.IGNORECASE,
 )
 
 
@@ -60,11 +71,18 @@ def lint_file(path: pathlib.Path) -> list[str]:
         return []
 
     errors: list[str] = []
-    for m in CREATE_INDEX_RE.finditer(src):
+    for m in CREATE_INDEX_PY_RE.finditer(src):
         index_name = m.group("index")
         if index_name in auto_index_names:
             errors.append(
-                f"{path.name}: redundant index '{index_name}' — "
+                f"{path.name}: redundant index '{index_name}' (op.create_index) — "
+                f"create_hypertable already creates it."
+            )
+    for m in CREATE_INDEX_SQL_RE.finditer(src):
+        index_name = m.group("index")
+        if index_name in auto_index_names:
+            errors.append(
+                f"{path.name}: redundant index '{index_name}' (raw CREATE INDEX) — "
                 f"create_hypertable already creates it."
             )
     return errors

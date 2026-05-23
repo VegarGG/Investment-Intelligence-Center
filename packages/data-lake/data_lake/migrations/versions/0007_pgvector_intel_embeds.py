@@ -44,7 +44,9 @@ def upgrade() -> None:
         "CREATE INDEX intel_embeds_cos_idx ON lake.intel_embeds "
         "USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);"
     )
-    op.execute("CREATE INDEX intel_embeds_ts_idx ON lake.intel_embeds (ts DESC)")
+    # D7.1 §H2.7 — do NOT create intel_embeds_ts_idx here. create_hypertable()
+    # above already created a B-tree index on the time column with exactly
+    # that name; re-creating raises 'relation already exists' on fresh DB.
 
 
 def downgrade() -> None:
